@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getTrack, getLesson } from '../data/courses';
+import { buildLessonMastery } from '../data/masteryCurriculum';
 import { useProgress } from '../utils/ProgressContext';
 
 export default function LessonView() {
   const { trackId, lessonId } = useParams();
-  const [tab, setTab] = useState('theory'); // theory | code | keypoints
+  const [tab, setTab] = useState('theory');
   const [copied, setCopied] = useState(false);
   const { isLessonComplete, markLessonComplete } = useProgress();
 
@@ -26,6 +27,7 @@ export default function LessonView() {
   const prevLesson = allLessons[currentIdx - 1];
   const nextLesson = allLessons[currentIdx + 1];
   const done = isLessonComplete(trackId, lessonId);
+  const mastery = buildLessonMastery(track, lesson);
 
   const handleComplete = () => {
     markLessonComplete(trackId, lessonId);
@@ -38,14 +40,17 @@ export default function LessonView() {
   };
 
   const TABS = [
-    { id: 'theory',    label: '📖 Theory' },
-    { id: 'code',      label: '💻 Code' },
-    { id: 'keypoints', label: '🎯 Key Points' },
+    { id: 'theory', label: 'Theory' },
+    { id: 'code', label: 'Code' },
+    { id: 'practice', label: 'Practice' },
+    { id: 'project', label: 'Project' },
+    { id: 'review', label: 'Review' },
+    { id: 'resources', label: 'Resources' },
+    { id: 'keypoints', label: 'Key Points' },
   ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5">
-      {/* Breadcrumb */}
+    <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex items-center gap-2 text-sm text-slate-500">
         <Link to="/courses" className="hover:text-slate-300">Courses</Link>
         <span>/</span>
@@ -54,7 +59,6 @@ export default function LessonView() {
         <span className="text-slate-300 truncate">{lesson.title}</span>
       </div>
 
-      {/* Header */}
       <div className={`card border bg-gradient-to-r ${track.gradient}/10 ${track.border}`}>
         <div className="flex items-start gap-4">
           <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${track.gradient} flex items-center justify-center text-lg flex-shrink-0`}>
@@ -63,20 +67,19 @@ export default function LessonView() {
           <div className="flex-1">
             <h1 className="text-xl font-bold text-white">{lesson.title}</h1>
             <div className="flex flex-wrap gap-3 mt-2">
-              <span className="text-xs text-slate-400">⏱ {lesson.duration}</span>
-              <span className="text-xs text-slate-400">📊 {lesson.difficulty}</span>
-              <span className="text-xs text-slate-400">📚 {track.title}</span>
-              {done && <span className="badge bg-emerald-500/20 text-emerald-400">✓ Completed</span>}
+              <span className="text-xs text-slate-400">{lesson.duration}</span>
+              <span className="text-xs text-slate-400">{lesson.difficulty}</span>
+              <span className="text-xs text-slate-400">{track.title}</span>
+              {done && <span className="badge bg-emerald-500/20 text-emerald-400">Completed</span>}
             </div>
           </div>
           {!done && (
             <button onClick={handleComplete} className="btn-success text-sm flex-shrink-0">
-              ✓ Mark Done
+              Mark Done
             </button>
           )}
         </div>
 
-        {/* Progress: lesson N of M */}
         <div className="mt-4 flex items-center gap-2">
           <span className="text-xs text-slate-500">Lesson {currentIdx + 1} of {allLessons.length}</span>
           <div className="flex-1 progress-bar">
@@ -88,13 +91,12 @@ export default function LessonView() {
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
+      <div className="grid grid-cols-2 gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700 sm:grid-cols-4 lg:grid-cols-7">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+            className={`py-2 px-3 rounded-md text-sm font-medium transition-all ${
               tab === t.id
                 ? 'bg-slate-700 text-white'
                 : 'text-slate-400 hover:text-slate-200'
@@ -105,7 +107,6 @@ export default function LessonView() {
         ))}
       </div>
 
-      {/* Tab Content */}
       <div className="animate-fadeIn">
         {tab === 'theory' && (
           <div className="card lesson-content">
@@ -118,7 +119,7 @@ export default function LessonView() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-white">Code Example</h3>
               <button onClick={handleCopy} className="btn-secondary text-xs py-1.5">
-                {copied ? '✓ Copied!' : '📋 Copy'}
+                {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
             <pre className="code-block text-sm overflow-x-auto">
@@ -127,12 +128,69 @@ export default function LessonView() {
           </div>
         )}
 
+        {tab === 'practice' && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ListPanel title="Learning Objectives" items={mastery.objectives} tone="blue" />
+            <ListPanel title="Mental Model" items={mastery.mentalModel} tone="emerald" />
+            <ListPanel title="Guided Practice" items={mastery.guidedPractice} tone="amber" className="lg:col-span-2" />
+          </div>
+        )}
+
+        {tab === 'project' && (
+          <div className="card space-y-4">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-blue-300 font-semibold">Production-style application</div>
+              <h3 className="mt-1 text-lg font-bold text-white">{mastery.projectTask.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-300">{mastery.projectTask.brief}</p>
+            </div>
+            <ListPanel title="Acceptance Criteria" items={mastery.projectTask.acceptance} tone="emerald" compact />
+            <div className="rounded-lg border border-white/10 bg-slate-950/60 p-4">
+              <h4 className="font-semibold text-white">How to submit it to yourself</h4>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Create a branch, implement the slice, write a short note explaining tradeoffs, then review it like a teammate would.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {tab === 'review' && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ListPanel title="Mastery Checklist" items={mastery.masteryChecklist} tone="emerald" />
+            <ListPanel title="Spaced Review Prompts" items={mastery.reviewPrompts} tone="blue" />
+            <ListPanel title="AI Coach Prompts" items={mastery.aiCoachPrompts} tone="amber" className="lg:col-span-2" />
+          </div>
+        )}
+
+        {tab === 'resources' && (
+          <div className="card">
+            <h3 className="font-bold text-white mb-2">External Resources</h3>
+            <p className="mb-4 text-sm leading-6 text-slate-400">
+              Use videos and documentation as supplements. The mastery work still happens in the practice, project, and review tabs.
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {mastery.resources.map(resource => (
+                <a
+                  key={resource.url}
+                  href={resource.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-white/10 bg-slate-950/60 p-4 transition hover:border-blue-400/50 hover:bg-slate-900"
+                >
+                  <span className="badge bg-blue-500/20 text-blue-300">{resource.type}</span>
+                  <div className="mt-2 font-semibold text-white">{resource.label}</div>
+                  <div className="mt-1 truncate text-xs text-slate-500">{resource.url}</div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
         {tab === 'keypoints' && (
           <div className="card">
-            <h3 className="font-bold text-white mb-4">🎯 Key Takeaways</h3>
+            <h3 className="font-bold text-white mb-4">Key Takeaways</h3>
             <div className="space-y-3">
               {lesson.keyPoints?.map((point, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 bg-slate-900 rounded-lg">
+                <div key={point} className="flex items-start gap-3 p-3 bg-slate-900 rounded-lg">
                   <div className={`w-6 h-6 rounded-full bg-gradient-to-br ${track.gradient} flex items-center justify-center text-xs text-white font-bold flex-shrink-0 mt-0.5`}>
                     {i + 1}
                   </div>
@@ -144,19 +202,18 @@ export default function LessonView() {
         )}
       </div>
 
-      {/* Navigation */}
       <div className="flex gap-3">
         {prevLesson && (
           <Link
             to={`/courses/${trackId}/lesson/${prevLesson.id}`}
             className="btn-secondary flex-1 justify-center"
           >
-            ← Previous
+            Previous
           </Link>
         )}
         {!done && (
           <button onClick={handleComplete} className="btn-success flex-1 justify-center">
-            ✓ Complete & Continue
+            Complete and Continue
           </button>
         )}
         {nextLesson && (
@@ -164,12 +221,12 @@ export default function LessonView() {
             to={`/courses/${trackId}/lesson/${nextLesson.id}`}
             className="btn-primary flex-1 justify-center"
           >
-            Next →
+            Next
           </Link>
         )}
         {!nextLesson && done && (
           <Link to={`/quiz/${trackId}`} className="btn-primary flex-1 justify-center">
-            🧠 Take Track Quiz →
+            Take Track Quiz
           </Link>
         )}
       </div>
@@ -177,11 +234,33 @@ export default function LessonView() {
   );
 }
 
-// Renders markdown-ish theory content
+function ListPanel({ title, items, tone = 'blue', compact = false, className = '' }) {
+  const tones = {
+    blue: 'bg-blue-500/20 text-blue-300',
+    emerald: 'bg-emerald-500/20 text-emerald-300',
+    amber: 'bg-amber-500/20 text-amber-300',
+  };
+
+  return (
+    <div className={`card ${className}`}>
+      <h3 className="font-bold text-white mb-4">{title}</h3>
+      <div className={compact ? 'space-y-2' : 'space-y-3'}>
+        {items.map((item, index) => (
+          <div key={`${title}-${item}`} className="flex items-start gap-3 rounded-lg bg-slate-950/50 p-3">
+            <div className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${tones[tone] ?? tones.blue}`}>
+              {index + 1}
+            </div>
+            <p className="text-sm leading-6 text-slate-300">{item}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TheoryContent({ content }) {
   if (!content) return <p className="text-slate-400">No content yet.</p>;
 
-  // Simple markdown renderer
   const lines = content.split('\n');
   const elements = [];
   let inCode = false;
@@ -228,7 +307,6 @@ function TheoryContent({ content }) {
         </li>
       );
     } else if (line.startsWith('| ')) {
-      // Table row — simplified
       const cells = line.split('|').filter(c => c.trim() && c.trim() !== '---');
       if (cells.length > 1) {
         elements.push(

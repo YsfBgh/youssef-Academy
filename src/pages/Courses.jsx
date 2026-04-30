@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { TRACKS } from '../data/courses';
+import { MASTERY_METHOD, TECH_AREAS, getTrackCapstone } from '../data/masteryCurriculum';
 import { useProgress } from '../utils/ProgressContext';
 
 export default function Courses() {
@@ -9,13 +10,74 @@ export default function Courses() {
   const { isLessonComplete, getTrackProgress } = useProgress();
 
   const track = TRACKS.find(t => t.id === selectedTrack) ?? TRACKS[0];
+  const capstone = getTrackCapstone(track);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <div>
         <h1 className="section-title">Courses</h1>
-        <p className="section-subtitle">Master each track to become the top developer at Jadev</p>
+        <p className="section-subtitle">Use lessons, guided practice, projects, reviews, and external resources as one mastery system.</p>
       </div>
+
+      <section className="card">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-white">Full-Stack Mastery Coverage</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
+              JaDev Academy should train the complete developer path, not only isolated syntax. These areas are the long-term curriculum map.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+            <Stat label="Tech areas" value={TECH_AREAS.length} />
+            <Stat label="Tracks" value={TRACKS.length} />
+            <Stat label="Lessons" value={TRACKS.reduce((sum, item) => sum + item.lessons.length, 0)} />
+            <Stat label="Method" value="6-step" />
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {TECH_AREAS.map(area => (
+            <div key={area.id} className="rounded-lg border border-white/10 bg-slate-950/50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-white">{area.title}</h3>
+                <span className="badge bg-white/5 text-slate-300">{area.level}</span>
+              </div>
+              <p className="text-xs leading-5 text-slate-400">{area.focus}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="card lg:col-span-2">
+          <h2 className="text-lg font-bold text-white">How Every Lesson Should Be Studied</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {MASTERY_METHOD.map(step => (
+              <div key={step.title} className="rounded-lg border border-white/10 bg-slate-950/50 p-3">
+                <h3 className="text-sm font-semibold text-blue-300">{step.title}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-400">{step.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <h2 className="text-lg font-bold text-white">{capstone.title}</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-400">
+            Finish each track by building one production-style slice instead of only reading lessons.
+          </p>
+          <div className="mt-4 space-y-2">
+            {capstone.milestones.map((item, index) => (
+              <div key={item} className="flex gap-3 rounded-lg bg-slate-950/50 p-2 text-sm text-slate-300">
+                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-300">
+                  {index + 1}
+                </span>
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Track Selector */}
       <div className="flex gap-2 flex-wrap">
@@ -101,6 +163,15 @@ export default function Courses() {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2">
+      <div className="text-lg font-bold text-white">{value}</div>
+      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
     </div>
   );
 }
