@@ -1,14 +1,29 @@
-import React, { useState } from 'react';
-import { EXERCISES, EXERCISE_TOPICS, getExercisesByTopic, getExercisesByDifficulty } from '../data/practiceExercises';
+import React, { useState, useCallback } from 'react';
+import { EXERCISES, EXERCISE_TOPICS } from '../data/practiceExercises';
 import { useProgress } from '../utils/ProgressContext';
 
 const DIFFICULTIES = ['All', 'Beginner', 'Intermediate', 'Advanced'];
+
+function scrollMainToTop() {
+  // The scrollable element is <main> in Layout — find it and scroll to top
+  document.querySelector('main')?.scrollTo({ top: 0, behavior: 'instant' });
+}
 
 export default function PracticeHub() {
   const [selectedTopic, setSelectedTopic] = useState('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState('All');
   const [search, setSearch] = useState('');
   const [activeExercise, setActiveExercise] = useState(null);
+
+  const openExercise = useCallback((ex) => {
+    setActiveExercise(ex);
+    scrollMainToTop();
+  }, []);
+
+  const closeExercise = useCallback(() => {
+    setActiveExercise(null);
+    scrollMainToTop();
+  }, []);
 
   const filtered = EXERCISES.filter(e => {
     const matchTopic = selectedTopic === 'all' || e.topic === selectedTopic;
@@ -22,7 +37,7 @@ export default function PracticeHub() {
     return (
       <ExerciseDetail
         exercise={activeExercise}
-        onBack={() => setActiveExercise(null)}
+        onBack={closeExercise}
       />
     );
   }
@@ -127,7 +142,7 @@ export default function PracticeHub() {
             <ExerciseCard
               key={exercise.id}
               exercise={exercise}
-              onOpen={() => setActiveExercise(exercise)}
+              onOpen={() => openExercise(exercise)}
             />
           ))}
         </div>

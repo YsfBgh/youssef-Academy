@@ -134,7 +134,7 @@ export default function Layout() {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        <nav className="sidebar-nav flex-1 space-y-5 overflow-y-auto px-3 py-4">
           {NAV_SECTIONS.map(section => (
             <div key={section.label}>
               {showSidebarLabels && (
@@ -219,8 +219,8 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main className="h-screen flex-1 overflow-y-auto pt-16 lg:pt-0">
-        <div className="mx-auto min-h-full w-full px-4 py-5 sm:px-6 lg:px-8 animate-fadeIn">
+      <main className="h-screen flex-1 overflow-y-auto pt-16 lg:pt-0 scroll-smooth">
+        <div className="mx-auto w-full max-w-none px-4 py-6 sm:px-6 lg:px-8 animate-fadeIn">
           <Outlet />
         </div>
       </main>
