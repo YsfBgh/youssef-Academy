@@ -31,12 +31,13 @@ The app is currently frontend-only and stores auth/progress in Supabase so frien
 - Tailwind CSS 3
 - react-syntax-highlighter
 - lucide-react
-- No backend yet
+- Netlify function for optional AI coach proxy
 - No TypeScript yet
 - Progress persistence: Supabase `profiles.progress` JSONB
 - Auth: username/password demo profiles stored in Supabase
 - Required env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- AI Coach supports an OpenAI-compatible endpoint/proxy configured in the browser; do not hardcode API keys in frontend code
+- AI Coach defaults to local Ollama through Vite proxy `/ollama/api/chat`; no API key is needed for native Ollama
+- Optional hosted AI providers should go through `netlify/functions/ai-coach.mjs`; do not hardcode API keys in frontend code
 
 Commands:
 
@@ -47,7 +48,7 @@ npm run build
 npm run preview
 ```
 
-Default Vite config uses port `3000`, but development has also been run manually on `3002`:
+Default Vite config uses port `3000` and proxies `/ollama` to `http://localhost:11434` for local Ollama. Development has also been run manually on `3002`:
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 3002 --strictPort
@@ -64,6 +65,7 @@ src/utils/ProgressContext.jsx        Supabase progress state and helpers
 src/utils/supabaseClient.js          Supabase browser client from Vite env vars
 src/index.css                        Tailwind layers and shared component classes
 src/data/courses.js                  TRACKS and lesson content
+src/data/masteryCurriculum.js        Full-stack coverage map, mastery method, lesson practice/project/review resources
 src/data/quizzes.js                  QUIZZES and quiz helpers
 src/data/challenges.js               CHALLENGES and code challenge helpers
 src/data/workflows.js                WORKFLOWS and SIMULATIONS
@@ -73,9 +75,9 @@ src/pages/Dashboard.jsx              Home, stats, progress, quick actions
 src/pages/CareerOS.jsx               Central career readiness dashboard
 src/pages/AuthPage.jsx               Username/password login/register screen backed by Supabase profiles
 src/pages/Leaderboard.jsx            Shared XP leaderboard from Supabase profiles
-src/pages/AICoach.jsx                Configurable AI coach client; use a backend proxy for real sharing
-src/pages/Courses.jsx                Track selector and lesson list
-src/pages/LessonView.jsx             Lesson detail tabs
+src/pages/AICoach.jsx                Configurable AI coach client; defaults to native Ollama
+src/pages/Courses.jsx                Track selector, mastery coverage, study method, capstone summary
+src/pages/LessonView.jsx             Lesson detail tabs: theory, code, practice, project, review, resources, key points
 src/pages/QuizPage.jsx               Quiz player/results
 src/pages/CodeLab.jsx                Code challenge interface
 src/pages/CodeReviewLab.jsx          Senior-style PR review practice
@@ -83,6 +85,8 @@ src/pages/DebuggingLab.jsx           Evidence-driven debugging practice
 src/pages/ArchitectureLab.jsx        System design and tradeoff practice
 src/pages/WorkflowPage.jsx           Step-by-step workflow guides
 src/pages/Simulations.jsx            Scenario-based simulations
+netlify/functions/ai-coach.mjs       Optional server-side AI coach proxy for Ollama or hosted providers
+vite.config.js                       Vite config with `/ollama` dev proxy
 ```
 
 ## Current Routes
@@ -131,6 +135,15 @@ When adding a new feature page:
 - `getLesson(trackId, lessonId)`
 - `totalLessons()`
 
+`src/data/masteryCurriculum.js`:
+
+- `TECH_AREAS`
+- `EXTERNAL_RESOURCE_LIBRARY`
+- `MASTERY_METHOD`
+- `getResourcesForTrack(trackId)`
+- `buildLessonMastery(track, lesson)`
+- `getTrackCapstone(track)`
+
 `src/data/quizzes.js`:
 
 - `QUIZZES`
@@ -177,6 +190,20 @@ Current shape:
   challenges: {
     [challengeId]: { completedAt: number }
   },
+  projects: {
+    [projectId]: { completedMilestones: string[] }
+  },
+  interviews: {},
+  agentLessons: {},
+  agentSims: {},
+  enterpriseMissions: {},
+  skillNodes: [],
+  dailyMissions: {},
+  careerChecks: {},
+  seniorHabits: {},
+  codeReviews: {},
+  debugScenarios: {},
+  architectureScenarios: {},
   lastVisit: string,
   streak: number
 }
@@ -187,6 +214,15 @@ Current helper API:
 - `markLessonComplete(trackId, lessonId)`
 - `markQuizComplete(trackId, score)`
 - `markChallengeComplete(challengeId)`
+- `markProjectMilestoneComplete(projectId, milestoneId)`
+- `markInterviewComplete(questionId)`
+- `markAgentLessonComplete(lessonId)`
+- `markAgentSimComplete(simId)`
+- `markEnterpriseMissionComplete(missionId, xpEarned)`
+- `markDailyMissionComplete(dateString, key)`
+- `markCodeReviewComplete(caseId)`
+- `markDebugScenarioComplete(scenarioId)`
+- `markArchitectureScenarioComplete(scenarioId)`
 - `isLessonComplete(trackId, lessonId)`
 - `isQuizComplete(trackId)`
 - `isChallengeComplete(id)`
@@ -204,6 +240,15 @@ XP rules currently:
 - Lesson complete: `50 XP`
 - Quiz score: `Math.round(score * 1.5)`
 - Challenge complete: `100 XP`
+- Project milestone complete: `100 XP`
+- Interview complete: `30 XP`
+- AI agent lesson complete: `60 XP`
+- AI agent simulation complete: `150 XP`
+- Daily mission complete: `100 XP`
+- Code review complete: `80 XP`
+- Debug scenario complete: `90 XP`
+- Architecture scenario complete: `120 XP`
+- Senior habit check: `15 XP`
 
 Level rule:
 
@@ -262,7 +307,15 @@ Avoid unrelated redesigns unless explicitly requested.
 
 ## Feature Expansion Direction
 
-The next major direction is to make the app a complete learning operating system. Suggested feature modules:
+The app is being moved from "notes plus quizzes" toward a mastery system:
+
+```text
+Diagnose -> learn mental model -> worked example -> guided practice -> project slice -> spaced review
+```
+
+The lesson page already generates practice, project, review, AI coach prompts, and external resource links from `masteryCurriculum.js`. Future content work should deepen the actual lesson bodies in `courses.js` and add structured exercises/projects, not just add more passive reading.
+
+Suggested feature modules:
 
 ### Roadmap
 
@@ -339,6 +392,33 @@ Teach practical AI-assisted development:
 - DevOps agent
 - Prompt patterns
 - Multi-agent workflow simulations
+
+### AI Coach
+
+Current local default:
+
+```text
+Provider: Ollama
+Endpoint: /ollama/api/chat
+Model: qwen3:latest
+```
+
+Local setup:
+
+```bash
+ollama serve
+ollama pull qwen3:latest
+npm run dev
+```
+
+For a hosted model, keep API keys server-side. Use Netlify environment variables without `VITE_`:
+
+```text
+AI_COACH_PROVIDER=openai-compatible
+AI_COACH_ENDPOINT=https://provider.example.com/v1/chat/completions
+AI_COACH_MODEL=...
+AI_COACH_API_KEY=...
+```
 
 ### Final Boss Mode
 
