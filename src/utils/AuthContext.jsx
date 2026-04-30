@@ -2,13 +2,32 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 
 const AuthContext = createContext(null);
+const INTERNAL_AUTH_DOMAIN = 'jadev-academy.app';
+
+function normalizeUsername(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+}
+
+function emailForUsername(usernameOrEmail) {
+  const clean = usernameOrEmail.trim().toLowerCase();
+  if (clean.includes('@')) return clean;
+
+  const username = normalizeUsername(clean);
+  if (username.length < 3) {
+    throw new Error('Username must be at least 3 characters.');
+  }
+
+  return `${username}@${INTERNAL_AUTH_DOMAIN}`;
+}
 
 function profileFromRow(row, fallbackUser = null) {
   if (!row && !fallbackUser) return null;
+  const fallbackUsername = fallbackUser?.user_metadata?.username ?? fallbackUser?.email?.split('@')[0] ?? 'developer';
 
   return {
     id: row?.id ?? fallbackUser?.id,
     name: row?.name ?? fallbackUser?.user_metadata?.name ?? fallbackUser?.email?.split('@')[0] ?? 'Developer',
+    username: row?.username ?? fallbackUsername,
     email: row?.email ?? fallbackUser?.email ?? '',
     progress: row?.progress ?? {},
     stats: {
@@ -36,12 +55,14 @@ async function fetchProfile(user) {
     return profileFromRow(data, user);
   }
 
-  const name = user.user_metadata?.name ?? user.email?.split('@')[0] ?? 'Developer';
+  const username = user.user_metadata?.username ?? user.email?.split('@')[0] ?? 'developer';
+  const name = user.user_metadata?.name ?? username;
   const { data: inserted, error: insertError } = await supabase
     .from('profiles')
     .insert({
       id: user.id,
       name,
+      username,
       email: user.email,
       progress: {},
       xp: 0,
@@ -68,7 +89,7 @@ export function AuthProvider({ children }) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id,name,email,xp,level,total_progress,streak,updated_at')
+      .select('id,name,username,email,xp,level,total_progress,streak,updated_at')
       .order('xp', { ascending: false });
 
     if (error) throw error;
@@ -133,39 +154,43 @@ export function AuthProvider({ children }) {
     };
   }, [loadCurrentProfile]);
 
-  const register = useCallback(async ({ name, email, password }) => {
+  const register = useCallback(async ({ name, username, password }) => {
     if (!supabase) throw new Error('Supabase is not configured.');
 
     const cleanName = name.trim();
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanName || !cleanEmail || !password) {
-      throw new Error('Name, email, and password are required.');
+    const cleanUsername = normalizeUsername(username);
+    if (!cleanName || !cleanUsername || !password) {
+      throw new Error('Name, username, and password are required.');
     }
+    if (cleanUsername.length < 3) {
+      throw new Error('Username must be at least 3 characters.');
+    }
+    const internalEmail = emailForUsername(cleanUsername);
 
     const { data, error } = await supabase.auth.signUp({
-      email: cleanEmail,
+      email: internalEmail,
       password,
       options: {
-        data: { name: cleanName },
+        data: { name: cleanName, username: cleanUsername },
       },
     });
 
     if (error) throw error;
 
     if (!data.session) {
-      return { needsConfirmation: true };
+      throw new Error('Disable email confirmations in Supabase Auth settings for username login, then try again.');
     }
 
     const profile = await fetchProfile(data.user);
     setCurrentUser(profile);
     await loadLeaderboard();
-    return { needsConfirmation: false };
+    return { ok: true };
   }, [loadLeaderboard]);
 
-  const login = useCallback(async ({ email, password }) => {
+  const login = useCallback(async ({ username, password }) => {
     if (!supabase) throw new Error('Supabase is not configured.');
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = emailForUsername(username);
     const { data, error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password,

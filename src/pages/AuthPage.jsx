@@ -3,7 +3,7 @@ import { useAuth } from '../utils/AuthContext';
 
 export default function AuthPage() {
   const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', username: '', password: '' });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -20,11 +20,11 @@ export default function AuthPage() {
     setSubmitting(true);
     try {
       if (mode === 'login') {
-        await login({ email: form.email, password: form.password });
+        await login({ username: form.username, password: form.password });
       } else {
         const result = await register(form);
-        if (result?.needsConfirmation) {
-          setMessage('Profile created. Confirm the email address, then log in.');
+        if (result?.ok) {
+          setMessage('Profile created. Log in with your username and password.');
           setMode('login');
         }
       }
@@ -45,7 +45,7 @@ export default function AuthPage() {
           </div>
           <h1 className="text-4xl font-extrabold text-white leading-tight mb-4">JaDev Academy</h1>
           <p className="text-slate-300 text-lg mb-6">
-            Personal engineer training with roadmaps, labs, enterprise missions, interviews, AI workflows, and a local leaderboard for your friends.
+            Personal engineer training with roadmaps, labs, enterprise missions, interviews, AI workflows, and a shared leaderboard for your friends.
           </p>
           <div className="grid grid-cols-2 gap-3">
             {['Career OS', 'Code Review', 'Debugging', 'Architecture', 'Projects', 'AI Coach'].map(item => (
@@ -86,12 +86,12 @@ export default function AuthPage() {
               </div>
             )}
             <div>
-              <label className="text-xs text-slate-400">Email</label>
-              <input className="input mt-1" type="email" value={form.email} onChange={e => update('email', e.target.value)} placeholder="you@example.com" />
+              <label className="text-xs text-slate-400">Username</label>
+              <input className="input mt-1" value={form.username} onChange={e => update('username', e.target.value)} placeholder="youssef" autoComplete="username" />
             </div>
             <div>
               <label className="text-xs text-slate-400">Password</label>
-              <input className="input mt-1" type="password" value={form.password} onChange={e => update('password', e.target.value)} placeholder="Supabase account password" />
+              <input className="input mt-1" type="password" value={form.password} onChange={e => update('password', e.target.value)} placeholder="Your password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
             </div>
 
             {error && (

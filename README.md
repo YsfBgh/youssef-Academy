@@ -94,11 +94,11 @@ jadev-academy/
 
 ## 🗄️ Database Setup
 
-JaDev Academy now stores accounts and progress in Supabase so friends can see each other's XP and progress.
+JaDev Academy uses a normal username/password screen for learners. Behind the scenes, Supabase Auth manages secure sessions and the `profiles` table stores progress so friends can see each other's XP.
 
 1. Create a Supabase project.
 2. Open **SQL Editor** and run `supabase/schema.sql`.
-3. In Supabase **Authentication → Providers → Email**, keep email/password enabled. For quick friend testing, disable email confirmations.
+3. In Supabase **Authentication → Providers → Email**, keep email/password enabled. Disable email confirmations, because learner usernames are mapped to internal app emails behind the scenes.
 4. Copy `.env.example` to `.env` and fill in:
 
 ```bash
@@ -121,7 +121,7 @@ Build command: npm run build
 Publish directory: dist
 ```
 
-After deployment, friends can open the Netlify URL, create accounts, and see each other's leaderboard progress through Supabase.
+After deployment, friends can open the Netlify URL, create username/password accounts, and see each other's leaderboard progress through Supabase.
 
 ---
 

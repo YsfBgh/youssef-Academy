@@ -40,7 +40,7 @@ export default function Leaderboard() {
                 <div className="text-sm font-bold text-slate-300">#{index + 1}</div>
                 <div>
                   <div className="font-semibold text-white text-sm">{user.name} {isMe && <span className="text-blue-400">(you)</span>}</div>
-                  <div className="text-xs text-slate-500">{user.email}</div>
+                  <div className="text-xs text-slate-500">@{user.username ?? user.email}</div>
                 </div>
                 <div className="text-right text-sm text-amber-300 font-semibold">{user.stats?.xp ?? 0}</div>
                 <div className="text-right text-sm text-blue-300">{user.stats?.totalProgress ?? 0}%</div>
