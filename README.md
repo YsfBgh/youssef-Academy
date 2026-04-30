@@ -10,6 +10,7 @@
 cd "Internchip 2026/jadev-academy"
 npm install
 npm run dev
+npm run check:db
 ```
 
 Then open → **http://localhost:3000**
@@ -107,6 +108,12 @@ VITE_SUPABASE_ANON_KEY=...
 ```
 
 On Netlify, add the same variables in **Site configuration → Environment variables**.
+
+Verify the database from your machine:
+
+```bash
+npm run check:db
+```
 
 ---
 

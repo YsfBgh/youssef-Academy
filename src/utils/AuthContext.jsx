@@ -4,6 +4,22 @@ import { isSupabaseConfigured, supabase } from './supabaseClient';
 const AuthContext = createContext(null);
 const CURRENT_PROFILE_KEY = 'jadev_current_profile_id';
 
+function isMissingProfilesTable(error) {
+  return error?.code === 'PGRST205' ||
+    error?.code === '42P01' ||
+    error?.message?.includes("Could not find the table 'public.profiles'");
+}
+
+function friendlyDatabaseError(error) {
+  if (isMissingProfilesTable(error)) {
+    return 'Database is not ready: run supabase/schema.sql in the Supabase SQL Editor, then refresh this page.';
+  }
+  if (error?.code === '42501') {
+    return 'Database permissions are not ready: run supabase/schema.sql again to create the demo policies.';
+  }
+  return error?.message ?? 'Database error. Check Supabase configuration.';
+}
+
 function normalizeUsername(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
 }
@@ -41,6 +57,7 @@ export function AuthProvider({ children }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState('');
+  const [databaseReady, setDatabaseReady] = useState(false);
 
   const loadLeaderboard = useCallback(async () => {
     if (!supabase) return [];
@@ -54,6 +71,8 @@ export function AuthProvider({ children }) {
 
     const rows = (data ?? []).map(row => profileFromRow(row));
     setLeaderboard(rows);
+    setDatabaseReady(true);
+    setAuthError('');
     return rows;
   }, []);
 
@@ -93,7 +112,8 @@ export function AuthProvider({ children }) {
         if (active) {
           localStorage.removeItem(CURRENT_PROFILE_KEY);
           setCurrentUser(null);
-          setAuthError(err.message);
+          setDatabaseReady(false);
+          setAuthError(friendlyDatabaseError(err));
         }
       } finally {
         if (active) setLoading(false);
@@ -143,7 +163,7 @@ export function AuthProvider({ children }) {
       if (error.code === '23505') {
         throw new Error('This username is already taken.');
       }
-      throw error;
+      throw new Error(friendlyDatabaseError(error));
     }
 
     const profile = profileFromRow(data);
@@ -163,7 +183,7 @@ export function AuthProvider({ children }) {
       .eq('username', cleanUsername)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) throw new Error(friendlyDatabaseError(error));
     if (!data) throw new Error('Invalid username or password.');
 
     const passwordHash = await hashPassword(cleanUsername, password);
@@ -204,7 +224,7 @@ export function AuthProvider({ children }) {
       .select('id,name,username,email,progress,xp,level,total_progress,streak,updated_at')
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(friendlyDatabaseError(error));
 
     const nextUser = profileFromRow(data);
     setCurrentUser(nextUser);
@@ -216,6 +236,7 @@ export function AuthProvider({ children }) {
     leaderboard,
     loading,
     authError,
+    databaseReady,
     register,
     login,
     logout,
@@ -227,6 +248,7 @@ export function AuthProvider({ children }) {
     leaderboard,
     loading,
     authError,
+    databaseReady,
     register,
     login,
     logout,

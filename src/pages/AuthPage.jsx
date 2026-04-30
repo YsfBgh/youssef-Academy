@@ -7,7 +7,7 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const { login, register, authError, isDatabaseConfigured } = useAuth();
+  const { login, register, authError, databaseReady, isDatabaseConfigured } = useAuth();
 
   function update(key, value) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -105,13 +105,13 @@ export default function AuthPage() {
               </div>
             )}
 
-            <button className="btn-primary w-full justify-center" type="submit" disabled={submitting || !isDatabaseConfigured}>
+            <button className="btn-primary w-full justify-center" type="submit" disabled={submitting || !isDatabaseConfigured || !databaseReady}>
               {submitting ? 'Please wait...' : mode === 'login' ? 'Enter Academy' : 'Create Profile'}
             </button>
           </form>
 
           <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-            Demo accounts, progress, XP, and leaderboard data are stored in Supabase so friends can see each other's progress from different devices.
+            Demo accounts, progress, XP, and leaderboard data are stored in Supabase. If signup is disabled, run `supabase/schema.sql` in Supabase first.
           </div>
         </section>
       </div>
