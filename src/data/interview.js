@@ -53,6 +53,26 @@ export const INTERVIEW_CATEGORIES = [
     description: 'Query optimization, indexing, transactions, normalization',
     questionCount: 12,
   },
+  {
+    id: 'aspnet',
+    title: 'ASP.NET Core & APIs',
+    icon: '🔌',
+    color: 'sky',
+    badge: 'bg-sky-500/20 text-sky-300',
+    border: 'border-sky-500/40',
+    description: 'Middleware, DI, controllers, validation, auth, minimal APIs',
+    questionCount: 12,
+  },
+  {
+    id: 'devops',
+    title: 'DevOps & Git',
+    icon: '🚀',
+    color: 'orange',
+    badge: 'bg-orange-500/20 text-orange-300',
+    border: 'border-orange-500/40',
+    description: 'Docker, CI/CD, Git workflows, deployment, environments',
+    questionCount: 8,
+  },
 ];
 
 export const INTERVIEW_QUESTIONS = [
@@ -601,6 +621,376 @@ entity.HasIndex(e => new { e.Status, e.CreatedAt }); // composite
 **Pro tip:** Use EXPLAIN/EXPLAIN ANALYZE to check if a query uses your index.`,
     tags: ['SQL', 'indexes', 'performance', 'B-tree', 'query-optimization'],
     followUps: ['What is a covering index?', 'What is index fragmentation?'],
+  },
+
+  // ─── ASP.NET Core & APIs ───────────────────────────────────
+  {
+    id: 'iq-asp-01',
+    categoryId: 'aspnet',
+    level: 'Junior',
+    question: 'What is dependency injection in ASP.NET Core and why is it important?',
+    shortAnswer: 'DI is a design pattern where an object\'s dependencies are provided to it rather than created internally. ASP.NET Core has a built-in DI container. It improves testability, loose coupling, and code maintainability.',
+    fullAnswer: `**Dependency Injection (DI)** separates the creation of objects from their use.
+
+**Without DI (tight coupling):**
+\`\`\`csharp
+class OrderService
+{
+    private readonly EmailService _email = new EmailService(); // hard dependency
+    public void PlaceOrder(Order o) { _email.Send("Order placed!"); }
+}
+// Cannot test OrderService without also running EmailService
+\`\`\`
+
+**With DI (loose coupling):**
+\`\`\`csharp
+class OrderService
+{
+    private readonly IEmailService _email;
+    public OrderService(IEmailService email) => _email = email;
+    public void PlaceOrder(Order o) { _email.Send("Order placed!"); }
+}
+// In tests, inject a mock IEmailService
+\`\`\`
+
+**Registering in ASP.NET Core:**
+\`\`\`csharp
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddTransient<IOrderService, OrderService>();
+builder.Services.AddSingleton<ICache, MemoryCache>();
+\`\`\`
+
+**Service lifetimes:**
+- **Transient** — new instance per injection. Use for lightweight, stateless services.
+- **Scoped** — one instance per HTTP request. Use for DbContext, business services.
+- **Singleton** — one instance for the app lifetime. Use for caches, config.
+
+**Never inject Scoped into Singleton** — "captive dependency" causes stale data bugs.`,
+    tags: ['DI', 'dependency-injection', 'architecture', 'testability'],
+    followUps: ['What is the difference between Transient, Scoped, and Singleton?', 'How would you mock a dependency in a unit test?'],
+  },
+  {
+    id: 'iq-asp-02',
+    categoryId: 'aspnet',
+    level: 'Junior',
+    question: 'What is middleware in ASP.NET Core? How do you write custom middleware?',
+    shortAnswer: 'Middleware is code that handles requests and responses in a pipeline. Each piece can process the request, pass it to the next middleware, and then process the response on the way back.',
+    fullAnswer: `**Middleware pipeline** processes every HTTP request in order.
+
+Built-in examples: UseAuthentication, UseAuthorization, UseStaticFiles, UseCors.
+
+\`\`\`csharp
+// Custom middleware class
+public class RequestTimingMiddleware
+{
+    private readonly RequestDelegate _next;
+
+    public RequestTimingMiddleware(RequestDelegate next) => _next = next;
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var sw = Stopwatch.StartNew();
+
+        await _next(context);  // pass to next middleware
+
+        sw.Stop();
+        var ms = sw.ElapsedMilliseconds;
+        context.Response.Headers.Append("X-Response-Time", ms + "ms");
+    }
+}
+
+// Register in Program.cs
+app.UseMiddleware<RequestTimingMiddleware>();
+\`\`\`
+
+**Order matters** — middleware runs in registration order:
+1. Exception handling (outermost — catches everything)
+2. HTTPS redirection
+3. Static files
+4. Routing
+5. Authentication
+6. Authorization
+7. Your custom middleware
+8. Endpoint (controller/minimal API)
+
+**Short-circuit:** middleware can return a response without calling _next, e.g., a rate limiter or IP block.`,
+    tags: ['middleware', 'pipeline', 'request-response', 'aspnet'],
+    followUps: ['When would you use middleware vs a filter vs an action?', 'How do you order middleware correctly?'],
+  },
+  {
+    id: 'iq-asp-03',
+    categoryId: 'aspnet',
+    level: 'Mid',
+    question: 'Explain the difference between authentication and authorization in ASP.NET Core.',
+    shortAnswer: 'Authentication answers "who are you?" — verifying identity via JWT, cookies, etc. Authorization answers "what are you allowed to do?" — checking permissions via roles, policies, or claims.',
+    fullAnswer: `**Authentication** = verifying identity.
+**Authorization** = checking permissions.
+
+\`\`\`csharp
+// Register both
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options => { ... });
+builder.Services.AddAuthorization();
+
+// Pipeline order — authentication MUST come before authorization
+app.UseAuthentication();
+app.UseAuthorization();
+\`\`\`
+
+**Role-based authorization:**
+\`\`\`csharp
+[Authorize(Roles = "Admin,Manager")]
+public IActionResult AdminDashboard() => Ok();
+\`\`\`
+
+**Policy-based (more flexible):**
+\`\`\`csharp
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("SeniorDev", policy =>
+        policy.RequireClaim("level", "senior")
+              .RequireAuthenticatedUser());
+});
+
+[Authorize(Policy = "SeniorDev")]
+public IActionResult SeniorFeature() => Ok();
+\`\`\`
+
+**JWT flow:**
+1. Client sends credentials to /auth/login
+2. Server validates and returns a signed JWT
+3. Client sends JWT in Authorization: Bearer header
+4. Server validates JWT signature on every request — no session storage needed`,
+    tags: ['authentication', 'authorization', 'JWT', 'roles', 'policies'],
+    followUps: ['What is the difference between JWT and session-based auth?', 'How do you refresh JWT tokens?'],
+  },
+  {
+    id: 'iq-asp-04',
+    categoryId: 'aspnet',
+    level: 'Mid',
+    question: 'What are the key HTTP status codes and when should you use each in a REST API?',
+    shortAnswer: '200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 422 Unprocessable Entity, 500 Internal Server Error.',
+    fullAnswer: `**2xx — Success**
+- **200 OK** — GET, PUT, PATCH success with a response body
+- **201 Created** — POST created a resource. Include Location header pointing to new resource
+- **204 No Content** — DELETE, or PUT/PATCH when no body needed
+
+**4xx — Client Errors**
+- **400 Bad Request** — malformed request, cannot parse JSON, invalid syntax
+- **401 Unauthorized** — not authenticated (no valid token/session)
+- **403 Forbidden** — authenticated but not authorized for this action
+- **404 Not Found** — resource does not exist
+- **409 Conflict** — duplicate resource, optimistic concurrency failure
+- **422 Unprocessable Entity** — syntactically valid but semantically invalid (validation errors)
+- **429 Too Many Requests** — rate limit exceeded
+
+**5xx — Server Errors**
+- **500 Internal Server Error** — unexpected exception
+- **502 Bad Gateway** — upstream service failure
+- **503 Service Unavailable** — overloaded, maintenance
+
+**Common mistakes:**
+- Returning 200 for errors ("success: false") — breaks HTTP semantics
+- Using 400 for authorization failures — should be 403
+- Returning 500 for business logic errors — should be 4xx
+- Never returning 201 for POST — clients cannot find the new resource`,
+    tags: ['REST', 'HTTP', 'status-codes', 'API-design'],
+    followUps: ['What is the difference between 401 and 403?', 'What should a 422 response body look like?'],
+  },
+  {
+    id: 'iq-asp-05',
+    categoryId: 'aspnet',
+    level: 'Mid',
+    question: 'How does model validation work in ASP.NET Core? What happens when validation fails?',
+    shortAnswer: 'Data Annotations on DTOs are automatically checked before action methods run. When validation fails, ModelState.IsValid is false. With [ApiController], a 400 ProblemDetails response is returned automatically.',
+    fullAnswer: `**Data Annotations on the DTO:**
+\`\`\`csharp
+public class CreateUserRequest
+{
+    [Required, MaxLength(50)]
+    public string Username { get; init; } = "";
+
+    [Required, EmailAddress]
+    public string Email { get; init; } = "";
+
+    [Range(18, 120)]
+    public int Age { get; init; }
+}
+\`\`\`
+
+**[ApiController] attribute** enables automatic validation:
+- Returns 400 ProblemDetails with field errors before the action runs
+- No need to check ModelState manually
+
+**Manual validation when needed:**
+\`\`\`csharp
+if (!ModelState.IsValid)
+    return ValidationProblem(ModelState);
+\`\`\`
+
+**Custom validation:**
+\`\`\`csharp
+public class FutureDateAttribute : ValidationAttribute
+{
+    protected override ValidationResult? IsValid(object? value, ValidationContext ctx)
+    {
+        if (value is DateTime date && date <= DateTime.Now)
+            return new ValidationResult("Date must be in the future");
+        return ValidationResult.Success;
+    }
+}
+\`\`\`
+
+**FluentValidation** (popular alternative): more expressive, testable validation rules separated from the DTO class.`,
+    tags: ['validation', 'ModelState', 'DataAnnotations', 'FluentValidation'],
+    followUps: ['What is FluentValidation and why might you prefer it?', 'How do you return validation errors in a standard format?'],
+  },
+
+  // ─── DevOps & Git ──────────────────────────────────────────────
+  {
+    id: 'iq-devops-01',
+    categoryId: 'devops',
+    level: 'Junior',
+    question: 'What is the difference between git merge and git rebase?',
+    shortAnswer: 'Merge preserves the full history with a merge commit. Rebase replays your commits on top of the target branch, creating a linear history. Rebase rewrites history — never rebase shared/public branches.',
+    fullAnswer: `**git merge** — keeps all history, creates a merge commit:
+\`\`\`
+      A---B---C  feature
+     /         \\
+D---E---F---G   main (merge commit)
+\`\`\`
+- Non-destructive — original commits unchanged
+- Creates a "merge commit" node in history
+- Use for merging long-lived feature branches to main
+
+**git rebase** — replays your commits on top of target:
+\`\`\`
+              A'--B'--C'  feature (replayed)
+             /
+D---E---F---G  main
+\`\`\`
+- Linear history — easier to read
+- Rewrites commit SHAs — dangerous on shared branches
+- Use for keeping a feature branch up-to-date with main
+
+**Golden rule:** never rebase commits that have been pushed to a shared remote branch. You will force others to deal with diverged history.
+
+**Typical workflow:**
+\`\`\`bash
+git checkout feature/login
+git fetch origin
+git rebase origin/main   # keep feature branch current
+# ... work ...
+git push origin feature/login
+# On GitHub: create PR, merge via merge commit or squash
+\`\`\``,
+    tags: ['git', 'merge', 'rebase', 'branching', 'workflow'],
+    followUps: ['What is git squash and when would you use it?', 'How do you resolve a merge conflict?'],
+  },
+  {
+    id: 'iq-devops-02',
+    categoryId: 'devops',
+    level: 'Junior',
+    question: 'What is Docker and why is it useful for development and deployment?',
+    shortAnswer: 'Docker packages an application and all its dependencies into a container — a lightweight, portable unit that runs identically everywhere. Eliminates "works on my machine" problems.',
+    fullAnswer: `**Docker** solves environment inconsistency by packaging the app and its runtime together.
+
+**Key concepts:**
+- **Image** — the blueprint (Dockerfile builds it). Immutable.
+- **Container** — a running instance of an image. Isolated process.
+- **Dockerfile** — instructions to build an image
+- **docker-compose** — define and run multi-container apps
+
+**Simple .NET Dockerfile:**
+\`\`\`dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 8080
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY *.csproj .
+RUN dotnet restore
+COPY . .
+RUN dotnet publish -c Release -o /app/publish
+
+FROM base AS final
+COPY --from=build /app/publish .
+ENTRYPOINT ["dotnet", "MyApp.dll"]
+\`\`\`
+
+**docker-compose for local dev:**
+\`\`\`yaml
+services:
+  api:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      - ConnectionStrings__Db=Host=db;Database=myapp
+    depends_on: [db]
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: secret
+\`\`\`
+
+**Why it matters for interviews:**
+Shows you understand deployment, not just coding.`,
+    tags: ['docker', 'containers', 'deployment', 'devops'],
+    followUps: ['What is the difference between a container and a virtual machine?', 'What is Kubernetes?'],
+  },
+  {
+    id: 'iq-devops-03',
+    categoryId: 'devops',
+    level: 'Mid',
+    question: 'What is CI/CD? Describe a basic pipeline for a .NET application.',
+    shortAnswer: 'CI (Continuous Integration) automatically builds and tests code on every push. CD (Continuous Delivery/Deployment) automatically deploys passing builds to staging or production.',
+    fullAnswer: `**CI — Continuous Integration:**
+- Every commit triggers a build and test run
+- Catches integration bugs before they reach main
+- Tools: GitHub Actions, Azure DevOps, GitLab CI
+
+**CD — Continuous Deployment:**
+- Passing CI automatically deploys to production (or staging)
+- Reduces manual deployment errors
+
+**Basic GitHub Actions pipeline for .NET:**
+\`\`\`yaml
+name: CI/CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v3
+        with: { dotnet-version: '8.0.x' }
+      - run: dotnet restore
+      - run: dotnet build --no-restore
+      - run: dotnet test --no-build --verbosity normal
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t myapp .
+      - run: docker push myregistry/myapp:latest
+      # Deploy to Azure App Service, AWS, etc.
+\`\`\`
+
+**Environment variables in CI:**
+- Store secrets in GitHub Secrets, not in code
+- Use environment-specific config files (.env.staging, .env.prod)
+- Never commit API keys, passwords, or connection strings`,
+    tags: ['CI-CD', 'GitHub-Actions', 'pipeline', 'automation', 'devops'],
+    followUps: ['What is a deployment environment (staging vs production)?', 'How do you handle database migrations in CI/CD?'],
   },
 ];
 

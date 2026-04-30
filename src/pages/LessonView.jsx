@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getTrack, getLesson } from '../data/courses';
 import { buildLessonMastery } from '../data/masteryCurriculum';
+import { getExercisesForTrack } from '../data/practiceExercises';
 import { useProgress } from '../utils/ProgressContext';
 
 export default function LessonView() {
@@ -28,6 +29,7 @@ export default function LessonView() {
   const nextLesson = allLessons[currentIdx + 1];
   const done = isLessonComplete(trackId, lessonId);
   const mastery = buildLessonMastery(track, lesson);
+  const relatedExercises = getExercisesForTrack(trackId).slice(0, 4);
 
   const handleComplete = () => {
     markLessonComplete(trackId, lessonId);
@@ -43,6 +45,7 @@ export default function LessonView() {
     { id: 'theory', label: 'Theory' },
     { id: 'code', label: 'Code' },
     { id: 'practice', label: 'Practice' },
+    { id: 'exercises', label: 'Exercises' },
     { id: 'project', label: 'Project' },
     { id: 'review', label: 'Review' },
     { id: 'resources', label: 'Resources' },
@@ -91,7 +94,7 @@ export default function LessonView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700 sm:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-4 gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700 sm:grid-cols-4 lg:grid-cols-8">
         {TABS.map(t => (
           <button
             key={t.id}
@@ -133,6 +136,70 @@ export default function LessonView() {
             <ListPanel title="Learning Objectives" items={mastery.objectives} tone="blue" />
             <ListPanel title="Mental Model" items={mastery.mentalModel} tone="emerald" />
             <ListPanel title="Guided Practice" items={mastery.guidedPractice} tone="amber" className="lg:col-span-2" />
+          </div>
+        )}
+
+        {tab === 'exercises' && (
+          <div className="space-y-4">
+            <div className="card">
+              <h3 className="font-bold text-white mb-1">Related Practice Exercises</h3>
+              <p className="text-sm text-slate-400 mb-4">
+                Hands-on exercises tied to this track. Each has progressive hints, starter code, and a full solution.
+              </p>
+
+              {relatedExercises.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-slate-400 text-sm mb-3">No exercises mapped to this track yet.</p>
+                  <Link to="/practice" className="btn-primary text-sm">Browse All Exercises</Link>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {relatedExercises.map(ex => (
+                    <div key={ex.id} className="rounded-lg border border-white/10 bg-slate-950/50 p-4 flex items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <h4 className="font-semibold text-white text-sm">{ex.title}</h4>
+                          <DiffBadge level={ex.difficulty} />
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">{ex.description}</p>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {ex.tags?.slice(0, 3).map(tag => (
+                            <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 border border-slate-700">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <span className="text-xs font-semibold text-amber-400">+{ex.xpReward} XP</span>
+                        <Link to="/practice" className="btn-secondary text-xs py-1.5 px-3">
+                          Open
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="pt-2">
+                    <Link to="/practice" className="btn-primary text-sm w-fit">
+                      View All Exercises →
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="card border border-blue-500/20 bg-blue-500/5">
+              <h3 className="font-bold text-white mb-2">AI-Generated Practice</h3>
+              <p className="text-sm text-slate-400 mb-3">
+                Ask the AI Coach to generate more exercises tailored to this topic.
+              </p>
+              <Link
+                to={'/aicoach'}
+                className="btn-secondary text-sm w-fit"
+              >
+                Ask AI Coach for exercises →
+              </Link>
+            </div>
           </div>
         )}
 
@@ -232,6 +299,15 @@ export default function LessonView() {
       </div>
     </div>
   );
+}
+
+function DiffBadge({ level }) {
+  const colors = {
+    Beginner:     'bg-emerald-500/20 text-emerald-400',
+    Intermediate: 'bg-amber-500/20 text-amber-400',
+    Advanced:     'bg-rose-500/20 text-rose-400',
+  };
+  return <span className={`badge text-xs ${colors[level] ?? colors.Beginner}`}>{level}</span>;
 }
 
 function ListPanel({ title, items, tone = 'blue', compact = false, className = '' }) {

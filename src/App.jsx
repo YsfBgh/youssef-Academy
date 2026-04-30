@@ -22,6 +22,7 @@ import ArchitectureLab from './pages/ArchitectureLab'
 import AuthPage from './pages/AuthPage'
 import Leaderboard from './pages/Leaderboard'
 import AICoach from './pages/AICoach'
+import PracticeHub from './pages/PracticeHub'
 import { useAuth } from './utils/AuthContext'
 import { ProgressProvider } from './utils/ProgressContext'
 
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="aiagents" element={<AIAgentsLab />} />
           <Route path="interview" element={<InterviewMode />} />
           <Route path="skilltree" element={<SkillTree />} />
+          <Route path="practice" element={<PracticeHub />} />
         </Route>
       </Routes>
     </ProgressProvider>

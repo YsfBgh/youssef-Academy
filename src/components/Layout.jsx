@@ -9,6 +9,7 @@ import {
   Building2,
   CalendarCheck,
   Code2,
+  Dumbbell,
   FolderKanban,
   Gamepad2,
   GitPullRequest,
@@ -46,6 +47,7 @@ const NAV_SECTIONS = [
     label: 'Learn',
     items: [
       { to: '/courses', label: 'Courses', icon: BookOpen },
+      { to: '/practice', label: 'Practice Hub', icon: Dumbbell },
       { to: '/quiz', label: 'Quizzes', icon: Brain },
       { to: '/codelab', label: 'Code Lab', icon: Code2 },
       { to: '/codereview', label: 'Code Review Lab', icon: GitPullRequest },
