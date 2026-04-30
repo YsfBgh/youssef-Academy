@@ -34,7 +34,7 @@ The app is currently frontend-only and stores auth/progress in Supabase so frien
 - No backend yet
 - No TypeScript yet
 - Progress persistence: Supabase `profiles.progress` JSONB
-- Auth: username/password UI backed by Supabase email/password auth
+- Auth: username/password demo profiles stored in Supabase
 - Required env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 - AI Coach supports an OpenAI-compatible endpoint/proxy configured in the browser; do not hardcode API keys in frontend code
 
@@ -59,7 +59,7 @@ npm run dev -- --host 127.0.0.1 --port 3002 --strictPort
 src/main.jsx                         React entry, wraps App in BrowserRouter
 src/App.jsx                          Route definitions
 src/components/Layout.jsx            Sidebar navigation, XP/streak display, Outlet
-src/utils/AuthContext.jsx            Supabase auth, current user, leaderboard stats
+src/utils/AuthContext.jsx            Supabase demo profile auth, current user, leaderboard stats
 src/utils/ProgressContext.jsx        Supabase progress state and helpers
 src/utils/supabaseClient.js          Supabase browser client from Vite env vars
 src/index.css                        Tailwind layers and shared component classes
@@ -71,7 +71,7 @@ src/data/career.js                   Career OS readiness, checklists, habits, fi
 src/data/engineeringLabs.js          Code review, debugging, and architecture scenarios
 src/pages/Dashboard.jsx              Home, stats, progress, quick actions
 src/pages/CareerOS.jsx               Central career readiness dashboard
-src/pages/AuthPage.jsx               Username/password login/register screen backed by Supabase
+src/pages/AuthPage.jsx               Username/password login/register screen backed by Supabase profiles
 src/pages/Leaderboard.jsx            Shared XP leaderboard from Supabase profiles
 src/pages/AICoach.jsx                Configurable AI coach client; use a backend proxy for real sharing
 src/pages/Courses.jsx                Track selector and lesson list

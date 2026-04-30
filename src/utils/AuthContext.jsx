@@ -2,83 +2,41 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 
 const AuthContext = createContext(null);
-const INTERNAL_AUTH_DOMAIN = 'example.com';
+const CURRENT_PROFILE_KEY = 'jadev_current_profile_id';
 
 function normalizeUsername(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
 }
 
-function emailForUsername(usernameOrEmail) {
-  const clean = usernameOrEmail.trim().toLowerCase();
-  if (clean.includes('@')) return clean;
-
-  const username = normalizeUsername(clean);
-  if (username.length < 3) {
-    throw new Error('Username must be at least 3 characters.');
-  }
-
-  return `${username}@${INTERNAL_AUTH_DOMAIN}`;
+async function hashPassword(username, password) {
+  const input = `jadev-academy:${normalizeUsername(username)}:${password}`;
+  const data = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-function profileFromRow(row, fallbackUser = null) {
-  if (!row && !fallbackUser) return null;
-  const fallbackUsername = fallbackUser?.user_metadata?.username ?? fallbackUser?.email?.split('@')[0] ?? 'developer';
+function profileFromRow(row) {
+  if (!row) return null;
 
   return {
-    id: row?.id ?? fallbackUser?.id,
-    name: row?.name ?? fallbackUser?.user_metadata?.name ?? fallbackUser?.email?.split('@')[0] ?? 'Developer',
-    username: row?.username ?? fallbackUsername,
-    email: row?.email ?? fallbackUser?.email ?? '',
-    progress: row?.progress ?? {},
+    id: row.id,
+    name: row.name ?? 'Developer',
+    username: row.username ?? 'developer',
+    email: row.email ?? '',
+    progress: row.progress ?? {},
     stats: {
-      xp: row?.xp ?? 0,
-      level: row?.level ?? 1,
-      totalProgress: row?.total_progress ?? 0,
-      streak: row?.streak ?? 1,
-      updatedAt: row?.updated_at ? new Date(row.updated_at).getTime() : Date.now(),
+      xp: row.xp ?? 0,
+      level: row.level ?? 1,
+      totalProgress: row.total_progress ?? 0,
+      streak: row.streak ?? 1,
+      updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : Date.now(),
     },
   };
 }
 
-async function fetchProfile(user) {
-  if (!supabase || !user) return null;
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (error) throw error;
-
-  if (data) {
-    return profileFromRow(data, user);
-  }
-
-  const username = user.user_metadata?.username ?? user.email?.split('@')[0] ?? 'developer';
-  const name = user.user_metadata?.name ?? username;
-  const { data: inserted, error: insertError } = await supabase
-    .from('profiles')
-    .insert({
-      id: user.id,
-      name,
-      username,
-      email: user.email,
-      progress: {},
-      xp: 0,
-      level: 1,
-      total_progress: 0,
-      streak: 1,
-    })
-    .select('*')
-    .single();
-
-  if (insertError) throw insertError;
-  return profileFromRow(inserted, user);
-}
-
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -99,17 +57,21 @@ export function AuthProvider({ children }) {
     return rows;
   }, []);
 
-  const loadCurrentProfile = useCallback(async (authSession) => {
-    if (!supabase || !authSession?.user) {
-      setCurrentUser(null);
-      return null;
-    }
+  const loadProfile = useCallback(async (profileId) => {
+    if (!supabase || !profileId) return null;
 
-    const profile = await fetchProfile(authSession.user);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id,name,username,email,progress,xp,level,total_progress,streak,updated_at')
+      .eq('id', profileId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const profile = profileFromRow(data);
     setCurrentUser(profile);
-    await loadLeaderboard();
     return profile;
-  }, [loadLeaderboard]);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -122,14 +84,17 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (!active) return;
-
-        setSession(data.session);
-        await loadCurrentProfile(data.session);
+        const savedProfileId = localStorage.getItem(CURRENT_PROFILE_KEY);
+        if (savedProfileId) {
+          await loadProfile(savedProfileId);
+        }
+        await loadLeaderboard();
       } catch (err) {
-        if (active) setAuthError(err.message);
+        if (active) {
+          localStorage.removeItem(CURRENT_PROFILE_KEY);
+          setCurrentUser(null);
+          setAuthError(err.message);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -137,22 +102,10 @@ export function AuthProvider({ children }) {
 
     init();
 
-    if (!supabase) return undefined;
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      if (!nextSession) {
-        setCurrentUser(null);
-        return;
-      }
-      loadCurrentProfile(nextSession).catch(err => setAuthError(err.message));
-    });
-
     return () => {
       active = false;
-      listener.subscription.unsubscribe();
     };
-  }, [loadCurrentProfile]);
+  }, [loadLeaderboard, loadProfile]);
 
   const register = useCallback(async ({ name, username, password }) => {
     if (!supabase) throw new Error('Supabase is not configured.');
@@ -165,23 +118,36 @@ export function AuthProvider({ children }) {
     if (cleanUsername.length < 3) {
       throw new Error('Username must be at least 3 characters.');
     }
-    const internalEmail = emailForUsername(cleanUsername);
-
-    const { data, error } = await supabase.auth.signUp({
-      email: internalEmail,
-      password,
-      options: {
-        data: { name: cleanName, username: cleanUsername },
-      },
-    });
-
-    if (error) throw error;
-
-    if (!data.session) {
-      throw new Error('Disable email confirmations in Supabase Auth settings for username login, then try again.');
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters.');
     }
 
-    const profile = await fetchProfile(data.user);
+    const passwordHash = await hashPassword(cleanUsername, password);
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert({
+        name: cleanName,
+        username: cleanUsername,
+        email: `${cleanUsername}@jadev.local`,
+        password_hash: passwordHash,
+        progress: {},
+        xp: 0,
+        level: 1,
+        total_progress: 0,
+        streak: 1,
+      })
+      .select('id,name,username,email,progress,xp,level,total_progress,streak,updated_at')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error('This username is already taken.');
+      }
+      throw error;
+    }
+
+    const profile = profileFromRow(data);
+    localStorage.setItem(CURRENT_PROFILE_KEY, profile.id);
     setCurrentUser(profile);
     await loadLeaderboard();
     return { ok: true };
@@ -190,28 +156,34 @@ export function AuthProvider({ children }) {
   const login = useCallback(async ({ username, password }) => {
     if (!supabase) throw new Error('Supabase is not configured.');
 
-    const cleanEmail = emailForUsername(username);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    });
+    const cleanUsername = normalizeUsername(username);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('username', cleanUsername)
+      .maybeSingle();
 
     if (error) throw error;
+    if (!data) throw new Error('Invalid username or password.');
 
-    setSession(data.session);
-    await loadCurrentProfile(data.session);
-  }, [loadCurrentProfile]);
+    const passwordHash = await hashPassword(cleanUsername, password);
+    if (data.password_hash !== passwordHash) {
+      throw new Error('Invalid username or password.');
+    }
 
-  const logout = useCallback(async () => {
-    if (!supabase) return;
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setSession(null);
+    const profile = profileFromRow(data);
+    localStorage.setItem(CURRENT_PROFILE_KEY, profile.id);
+    setCurrentUser(profile);
+    await loadLeaderboard();
+  }, [loadLeaderboard]);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem(CURRENT_PROFILE_KEY);
     setCurrentUser(null);
   }, []);
 
   const updateStats = useCallback(async ({ progress, xp, level, totalProgress, streak }) => {
-    if (!supabase || !session?.user?.id) return;
+    if (!supabase || !currentUser?.id) return;
 
     const update = {
       xp,
@@ -228,19 +200,18 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase
       .from('profiles')
       .update(update)
-      .eq('id', session.user.id)
-      .select('*')
+      .eq('id', currentUser.id)
+      .select('id,name,username,email,progress,xp,level,total_progress,streak,updated_at')
       .single();
 
     if (error) throw error;
 
-    const nextUser = profileFromRow(data, session.user);
+    const nextUser = profileFromRow(data);
     setCurrentUser(nextUser);
     await loadLeaderboard();
-  }, [loadLeaderboard, session?.user]);
+  }, [currentUser?.id, loadLeaderboard]);
 
   const value = useMemo(() => ({
-    session,
     currentUser,
     leaderboard,
     loading,
@@ -252,7 +223,6 @@ export function AuthProvider({ children }) {
     refreshLeaderboard: loadLeaderboard,
     isDatabaseConfigured: isSupabaseConfigured,
   }), [
-    session,
     currentUser,
     leaderboard,
     loading,

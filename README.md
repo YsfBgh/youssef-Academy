@@ -88,17 +88,17 @@ jadev-academy/
 - **React 18** + **Vite** — fast development
 - **React Router v6** — client-side routing
 - **Tailwind CSS** — utility-first styling
-- **Supabase** — shared auth, progress storage, and leaderboard data
+- **Supabase** — shared demo profiles, progress storage, and leaderboard data
 
 ---
 
 ## 🗄️ Database Setup
 
-JaDev Academy uses a normal username/password screen for learners. Behind the scenes, Supabase Auth maps usernames to internal app emails and the `profiles` table stores progress so friends can see each other's XP.
+JaDev Academy uses a normal username/password screen for learners. The `profiles` table stores demo accounts, progress, and XP so friends can see each other's leaderboard progress.
 
 1. Create a Supabase project.
 2. Open **SQL Editor** and run `supabase/schema.sql`.
-3. In Supabase **Authentication → Providers → Email**, keep email/password enabled. Disable email confirmations, because learner usernames are mapped to internal app emails behind the scenes.
+3. This demo login does not use Supabase Auth email signup. It stores a password hash in `profiles.password_hash`, which is enough for a private friends demo but not for production security.
 4. Copy `.env.example` to `.env` and fill in:
 
 ```bash

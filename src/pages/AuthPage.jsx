@@ -111,7 +111,7 @@ export default function AuthPage() {
           </form>
 
           <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-            Accounts, progress, XP, and leaderboard data are stored in Supabase so friends can see each other's progress from different devices.
+            Demo accounts, progress, XP, and leaderboard data are stored in Supabase so friends can see each other's progress from different devices.
           </div>
         </section>
       </div>
