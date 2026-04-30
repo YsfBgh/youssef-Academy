@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 
 const AuthContext = createContext(null);
-const INTERNAL_AUTH_DOMAIN = 'jadev-academy.app';
+const INTERNAL_AUTH_DOMAIN = 'example.com';
 
 function normalizeUsername(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');

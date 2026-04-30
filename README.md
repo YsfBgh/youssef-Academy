@@ -94,7 +94,7 @@ jadev-academy/
 
 ## 🗄️ Database Setup
 
-JaDev Academy uses a normal username/password screen for learners. Behind the scenes, Supabase Auth manages secure sessions and the `profiles` table stores progress so friends can see each other's XP.
+JaDev Academy uses a normal username/password screen for learners. Behind the scenes, Supabase Auth maps usernames to internal app emails and the `profiles` table stores progress so friends can see each other's XP.
 
 1. Create a Supabase project.
 2. Open **SQL Editor** and run `supabase/schema.sql`.
