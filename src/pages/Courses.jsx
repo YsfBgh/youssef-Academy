@@ -1,382 +1,394 @@
 import React, { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { TRACKS } from '../data/courses';
-import { MASTERY_METHOD, TECH_AREAS, getTrackCapstone } from '../data/masteryCurriculum';
 import { useProgress } from '../utils/ProgressContext';
+import { hasExercise } from '../data/exercises';
+import {
+  Lock,
+  CheckCircle2,
+  Circle,
+  ChevronRight,
+  Zap,
+  Target,
+  BookOpen,
+  Play,
+  Star,
+} from 'lucide-react';
 
-const ROLES = ['All', 'Backend', 'Frontend', 'Full-Stack', 'DevOps'];
-const LEVELS = ['All', 'Beginner', 'Intermediate', 'Advanced'];
-
-// Static metadata per track — skill level, role, prerequisites, estimated hours
+// ── Track metadata ────────────────────────────────────────────
 const TRACK_META = {
-  csharp:    { level: 'Beginner', role: 'Backend',    prereqs: [],               hours: 40, skillLevel: 'Foundational' },
-  react:     { level: 'Intermediate', role: 'Frontend', prereqs: ['JavaScript'],  hours: 35, skillLevel: 'Practical' },
-  nextjs:    { level: 'Intermediate', role: 'Full-Stack', prereqs: ['React'],     hours: 30, skillLevel: 'Practical' },
-  apis:      { level: 'Intermediate', role: 'Backend',  prereqs: ['C# & .NET'],   hours: 30, skillLevel: 'Production' },
-  oop:       { level: 'Intermediate', role: 'Backend',  prereqs: ['C# & .NET'],   hours: 20, skillLevel: 'Foundational' },
-  refactor:  { level: 'Advanced',    role: 'Full-Stack', prereqs: ['OOP'],        hours: 25, skillLevel: 'Interview-Ready' },
+  csharp:   { level: 'Beginner',     role: 'Backend',     hours: 40, xpPerLesson: 50 },
+  react:    { level: 'Intermediate', role: 'Frontend',    hours: 35, xpPerLesson: 50 },
+  nextjs:   { level: 'Intermediate', role: 'Full-Stack',  hours: 30, xpPerLesson: 50 },
+  apis:     { level: 'Intermediate', role: 'Backend',     hours: 30, xpPerLesson: 50 },
+  oop:      { level: 'Intermediate', role: 'Backend',     hours: 20, xpPerLesson: 50 },
+  refactor: { level: 'Advanced',     role: 'Full-Stack',  hours: 25, xpPerLesson: 50 },
 };
 
-const SKILL_LEVEL_COLORS = {
-  Foundational:     'bg-blue-500/20 text-blue-300',
-  Practical:        'bg-emerald-500/20 text-emerald-300',
-  Production:       'bg-violet-500/20 text-violet-300',
-  'Interview-Ready':'bg-amber-500/20 text-amber-300',
+const LEVEL_COLORS = {
+  Beginner:     'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  Intermediate: 'bg-amber-500/20   text-amber-300   border-amber-500/30',
+  Advanced:     'bg-rose-500/20    text-rose-300    border-rose-500/30',
 };
 
+const DIFF_COLORS = {
+  Beginner:     'text-emerald-400',
+  Intermediate: 'text-amber-400',
+  Advanced:     'text-rose-400',
+};
+
+// ── Mission node component ────────────────────────────────────
+function MissionNode({ lesson, idx, trackId, status, track }) {
+  const navigate = useNavigate();
+  const isLocked    = status === 'locked';
+  const isComplete  = status === 'complete';
+  const isCurrent   = status === 'current';
+  const hasEx       = hasExercise(trackId, lesson.id);
+
+  const nodeColors = isComplete
+    ? `bg-gradient-to-br ${track.gradient} border-transparent shadow-lg`
+    : isCurrent
+    ? 'bg-slate-800 border-blue-500/60 shadow-blue-500/20 shadow-lg'
+    : 'bg-slate-900/80 border-slate-700/50';
+
+  const textColor  = isLocked ? 'text-slate-600' : 'text-white';
+  const subColor   = isLocked ? 'text-slate-700' : 'text-slate-400';
+
+  return (
+    <div className="relative flex gap-4 items-start">
+      {/* Vertical connector line */}
+      <div className="flex flex-col items-center">
+        <button
+          onClick={() => !isLocked && navigate(`/courses/${trackId}/lesson/${lesson.id}`)}
+          disabled={isLocked}
+          className={`relative z-10 w-11 h-11 rounded-full border-2 flex items-center justify-center font-bold text-sm flex-shrink-0 transition-all duration-200 ${nodeColors} ${
+            isCurrent ? 'animate-glow ring-2 ring-blue-500/30' : ''
+          } ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
+        >
+          {isComplete
+            ? <CheckCircle2 size={18} className="text-white" />
+            : isLocked
+            ? <Lock size={14} className="text-slate-600" />
+            : <span className={textColor}>{idx + 1}</span>
+          }
+        </button>
+        {/* line below node — last node has no line */}
+        <div className={`w-0.5 h-8 mt-1 ${isComplete ? `bg-gradient-to-b ${track.gradient}` : 'bg-slate-800'}`} />
+      </div>
+
+      {/* Card */}
+      <button
+        onClick={() => !isLocked && navigate(`/courses/${trackId}/lesson/${lesson.id}`)}
+        disabled={isLocked}
+        className={`flex-1 mb-2 text-left rounded-xl border p-4 transition-all duration-200 ${
+          isLocked
+            ? 'border-slate-800/60 bg-slate-900/30 cursor-not-allowed opacity-50'
+            : isCurrent
+            ? 'border-blue-500/40 bg-slate-900/90 hover:border-blue-400/60 hover:bg-slate-900 cursor-pointer'
+            : isComplete
+            ? `border-white/10 bg-gradient-to-r ${track.gradient}/10 hover:${track.gradient}/20 cursor-pointer`
+            : 'border-white/10 bg-slate-900/60 cursor-not-allowed opacity-60'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            {/* Status label */}
+            {isCurrent && (
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                <span className="text-[10px] font-bold tracking-widest text-blue-400 uppercase">Current Mission</span>
+              </div>
+            )}
+            {isComplete && (
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">Complete</span>
+              </div>
+            )}
+            <h3 className={`font-bold text-sm leading-tight ${textColor}`}>{lesson.title}</h3>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span className={`text-[10px] font-semibold uppercase tracking-wide ${DIFF_COLORS[lesson.difficulty] ?? DIFF_COLORS.Beginner}`}>
+                {lesson.difficulty ?? 'Beginner'}
+              </span>
+              <span className="text-[10px] text-slate-600">•</span>
+              <span className={`text-[10px] ${subColor}`}>{lesson.duration}</span>
+              {hasEx && (
+                <>
+                  <span className="text-[10px] text-slate-600">•</span>
+                  <span className="text-[10px] text-violet-400 font-semibold flex items-center gap-0.5">
+                    <Zap size={8} /> Coding Mission
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <span className={`text-xs font-bold ${isComplete ? 'text-emerald-400' : isLocked ? 'text-slate-700' : 'text-amber-400'}`}>
+              +50 XP
+            </span>
+            {!isLocked && (
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                isComplete
+                  ? `bg-gradient-to-br ${track.gradient}`
+                  : isCurrent
+                  ? 'bg-blue-500/20'
+                  : 'bg-slate-800'
+              }`}>
+                {isComplete
+                  ? <CheckCircle2 size={13} className="text-white" />
+                  : <Play size={11} className={isCurrent ? 'text-blue-400' : 'text-slate-500'} />
+                }
+              </div>
+            )}
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+// ── Track card for selector ───────────────────────────────────
+function TrackCard({ track, isSelected, progress, onClick }) {
+  const meta = TRACK_META[track.id] ?? {};
+  return (
+    <button
+      onClick={onClick}
+      className={`text-left rounded-xl border p-3.5 transition-all duration-200 ${
+        isSelected
+          ? `border bg-gradient-to-br ${track.gradient}/10 ${track.border} shadow-lg`
+          : 'border-white/8 bg-slate-900/60 hover:border-white/20 hover:bg-slate-900'
+      }`}
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${track.gradient} flex items-center justify-center text-lg flex-shrink-0`}>
+          {track.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-white leading-tight truncate">{track.title}</h3>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {meta.level && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold ${LEVEL_COLORS[meta.level]}`}>
+                {meta.level}
+              </span>
+            )}
+            <span className="text-[9px] text-slate-600">{track.lessons?.length} missions</span>
+          </div>
+        </div>
+        <span className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-slate-500'}`}>
+          {progress}%
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+        <div
+          className={`h-full rounded-full bg-gradient-to-r ${track.gradient} transition-all duration-500`}
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </button>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────
 export default function Courses() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const selectedTrack = searchParams.get('track') || TRACKS[0].id;
+  const selectedTrackId = searchParams.get('track') || TRACKS[0].id;
   const { isLessonComplete, getTrackProgress } = useProgress();
 
-  const [search, setSearch] = useState('');
-  const [filterRole, setFilterRole] = useState('All');
-  const [filterLevel, setFilterLevel] = useState('All');
-  const [showFilters, setShowFilters] = useState(false);
+  const track    = TRACKS.find(t => t.id === selectedTrackId) ?? TRACKS[0];
+  const meta     = TRACK_META[track.id] ?? {};
+  const progress = getTrackProgress(track.id);
 
-  const track = TRACKS.find(t => t.id === selectedTrack) ?? TRACKS[0];
-  const capstone = getTrackCapstone(track);
-
-  const filteredTracks = TRACKS.filter(t => {
-    const meta = TRACK_META[t.id] ?? {};
-    const matchSearch = !search ||
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      t.subtitle?.toLowerCase().includes(search.toLowerCase());
-    const matchRole  = filterRole === 'All' || meta.role === filterRole;
-    const matchLevel = filterLevel === 'All' || meta.level === filterLevel;
-    return matchSearch && matchRole && matchLevel;
+  // Figure out lesson states
+  const lessonStates = track.lessons.map((lesson, idx) => {
+    const done = isLessonComplete(track.id, lesson.id);
+    if (done) return 'complete';
+    // First incomplete lesson is "current"
+    const prevDone = idx === 0 || isLessonComplete(track.id, track.lessons[idx - 1].id);
+    if (prevDone) return 'current';
+    return 'locked';
   });
 
+  // Stats
+  const completedCount = lessonStates.filter(s => s === 'complete').length;
+  const totalXP        = completedCount * 50;
+  const currentMission = track.lessons.find((_, i) => lessonStates[i] === 'current');
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="section-title">Courses</h1>
-        <p className="section-subtitle">
-          Every track follows the same mastery system: explain → model → example → exercise → project → review.
-          Work through a track sequentially or jump to the skill you need.
-        </p>
-      </div>
+    <div className="max-w-5xl mx-auto space-y-6">
 
-      {/* Coverage stats */}
-      <section className="card">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-white">Full-Stack Curriculum Coverage</h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-              Tracks span backend, frontend, data, testing, and deployment — aligned with what real engineering teams expect from a mid-to-senior developer.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4 shrink-0">
-            <Stat label="Tracks" value={TRACKS.length} />
-            <Stat label="Lessons" value={TRACKS.reduce((s, t) => s + t.lessons.length, 0)} />
-            <Stat label="Tech areas" value={TECH_AREAS.length} />
-            <Stat label="Hours est." value={Object.values(TRACK_META).reduce((s, m) => s + m.hours, 0) + '+'} />
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {TECH_AREAS.slice(0, 6).map(area => (
-            <div key={area.id} className="rounded-lg border border-white/10 bg-slate-950/50 p-3">
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <h3 className="text-sm font-semibold text-white leading-tight">{area.title}</h3>
-                <span className="badge bg-white/5 text-slate-400 text-[10px] shrink-0">{area.level}</span>
-              </div>
-              <p className="text-xs leading-5 text-slate-400">{area.focus}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Mastery method */}
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="card lg:col-span-2">
-          <h2 className="text-lg font-bold text-white mb-4">How to Study Each Lesson</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {MASTERY_METHOD.map((step, i) => (
-              <div key={step.title} className="flex items-start gap-3 rounded-lg border border-white/10 bg-slate-950/50 p-3">
-                <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold flex items-center justify-center shrink-0">
-                  {i + 1}
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white">{step.title}</h3>
-                  <p className="mt-0.5 text-xs leading-5 text-slate-400">{step.body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="card">
-          <h2 className="text-lg font-bold text-white">{capstone.title}</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-400 text-xs">
-            Complete each track by building a production-style slice.
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="section-title">Mission Control</h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Choose a track, follow the path. Each mission builds on the last.
           </p>
-          <div className="mt-4 space-y-2">
-            {capstone.milestones.slice(0, 5).map((item, i) => (
-              <div key={item} className="flex gap-3 rounded-lg bg-slate-950/50 p-2 text-sm text-slate-300">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-300">
-                  {i + 1}
-                </span>
-                <span className="text-xs leading-5">{item}</span>
-              </div>
-            ))}
-          </div>
         </div>
-      </section>
-
-      {/* Search and Filter */}
-      <div className="card space-y-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <input
-            className="input flex-1 min-w-0"
-            placeholder="Search tracks..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <button
-            onClick={() => setShowFilters(f => !f)}
-            className={`btn-secondary text-sm shrink-0 ${showFilters ? 'border-blue-500/40 text-blue-300' : ''}`}
+        {currentMission && (
+          <Link
+            to={`/courses/${track.id}/lesson/${currentMission.id}`}
+            className="btn-primary text-sm flex-shrink-0"
           >
-            Filters {showFilters ? '▲' : '▼'}
-          </button>
-        </div>
-
-        {showFilters && (
-          <div className="grid gap-4 sm:grid-cols-2 pt-1">
-            <div>
-              <label className="text-xs text-slate-400 mb-2 block">Role</label>
-              <div className="flex flex-wrap gap-2">
-                {ROLES.map(r => (
-                  <button
-                    key={r}
-                    onClick={() => setFilterRole(r)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                      filterRole === r
-                        ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                        : 'border-slate-700 text-slate-400 hover:border-slate-500'
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-2 block">Level</label>
-              <div className="flex flex-wrap gap-2">
-                {LEVELS.map(l => (
-                  <button
-                    key={l}
-                    onClick={() => setFilterLevel(l)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                      filterLevel === l
-                        ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                        : 'border-slate-700 text-slate-400 hover:border-slate-500'
-                    }`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {(search || filterRole !== 'All' || filterLevel !== 'All') && (
-          <p className="text-xs text-slate-500">
-            {filteredTracks.length} of {TRACKS.length} tracks shown.{' '}
-            <button
-              onClick={() => { setSearch(''); setFilterRole('All'); setFilterLevel('All'); }}
-              className="text-blue-400 hover:underline"
-            >
-              Clear
-            </button>
-          </p>
+            <Play size={14} /> Resume Mission
+          </Link>
         )}
       </div>
 
-      {/* Track Selector */}
+      {/* Track selector grid */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredTracks.map(t => {
-          const meta = TRACK_META[t.id] ?? {};
-          const progress = getTrackProgress(t.id);
-          return (
-            <button
-              key={t.id}
-              onClick={() => setSearchParams({ track: t.id })}
-              className={`card card-hover text-left transition-all ${
-                selectedTrack === t.id
-                  ? `border ${t.border} bg-gradient-to-r ${t.gradient}/10`
-                  : ''
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${t.gradient} flex items-center justify-center text-xl shrink-0`}>
-                  {t.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-1">
-                    <h3 className="text-sm font-bold text-white leading-tight">{t.title}</h3>
-                    <span className={`text-xs font-semibold shrink-0 ${t.badge?.split(' ')[1] ?? 'text-slate-300'}`}>
-                      {progress}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {meta.skillLevel && (
-                      <span className={`badge text-[10px] ${SKILL_LEVEL_COLORS[meta.skillLevel] ?? ''}`}>
-                        {meta.skillLevel}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-slate-500">{t.lessons?.length} lessons</span>
-                    <span className="text-[10px] text-slate-500">{meta.hours}h est.</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mini progress bar */}
-              <div className="progress-bar mt-3">
-                <div
-                  className={`progress-fill bg-gradient-to-r ${t.gradient}`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-
-              {/* Prerequisites */}
-              {meta.prereqs?.length > 0 && (
-                <div className="mt-2 flex items-center gap-1 flex-wrap">
-                  <span className="text-[10px] text-slate-500">Prereq:</span>
-                  {meta.prereqs.map(p => (
-                    <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </button>
-          );
-        })}
+        {TRACKS.map(t => (
+          <TrackCard
+            key={t.id}
+            track={t}
+            isSelected={t.id === selectedTrackId}
+            progress={getTrackProgress(t.id)}
+            onClick={() => setSearchParams({ track: t.id })}
+          />
+        ))}
       </div>
 
-      {filteredTracks.length === 0 && (
-        <div className="card text-center py-10">
-          <p className="text-slate-400">No tracks match your filters.</p>
-        </div>
-      )}
+      {/* Selected track detail */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
 
-      {/* Selected Track Detail */}
-      <div>
-        <div className={`card border mb-4 bg-gradient-to-r ${track.gradient}/15 ${track.border}`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${track.gradient} flex items-center justify-center text-2xl shrink-0`}>
-              {track.icon}
-            </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-bold text-white">{track.title}</h2>
-              <p className="text-slate-400 text-sm mt-0.5">{track.subtitle}</p>
-              <div className="flex items-center gap-3 mt-2 flex-wrap">
-                {TRACK_META[track.id]?.skillLevel && (
-                  <span className={`badge text-xs ${SKILL_LEVEL_COLORS[TRACK_META[track.id].skillLevel]}`}>
-                    {TRACK_META[track.id].skillLevel}
-                  </span>
-                )}
-                {TRACK_META[track.id]?.prereqs?.length > 0 && (
-                  <span className="text-xs text-slate-400">
-                    Prereqs: {TRACK_META[track.id].prereqs.join(', ')}
-                  </span>
-                )}
-                <span className="text-xs text-slate-500">
-                  ~{TRACK_META[track.id]?.hours ?? '?'}h estimated
-                </span>
+        {/* Mission Map */}
+        <div className="space-y-1">
+          {/* Track header */}
+          <div className={`rounded-xl border p-4 mb-5 bg-gradient-to-r ${track.gradient}/10 ${track.border}`}>
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${track.gradient} flex items-center justify-center text-2xl flex-shrink-0`}>
+                {track.icon}
               </div>
-            </div>
-            <div className="text-right shrink-0">
-              <div className={`text-3xl font-bold ${track.badge?.split(' ')[1] ?? 'text-white'}`}>
-                {getTrackProgress(track.id)}%
-              </div>
-              <div className="text-xs text-slate-500">{track.lessons.length} lessons</div>
-            </div>
-          </div>
-          <div className="progress-bar mt-4">
-            <div
-              className={`progress-fill bg-gradient-to-r ${track.gradient}`}
-              style={{ width: `${getTrackProgress(track.id)}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Lessons list */}
-        <div className="space-y-2">
-          {track.lessons.map((lesson, idx) => {
-            const done = isLessonComplete(track.id, lesson.id);
-            return (
-              <Link
-                key={lesson.id}
-                to={`/courses/${track.id}/lesson/${lesson.id}`}
-                className={`card card-hover flex items-center gap-4 ${done ? `${track.border} bg-gradient-to-r ${track.gradient}/5` : ''}`}
-              >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                  done
-                    ? `bg-gradient-to-br ${track.gradient} text-white`
-                    : 'bg-slate-700 text-slate-400'
-                }`}>
-                  {done ? '✓' : idx + 1}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-white text-sm">{lesson.title}</h3>
-                  <div className="flex items-center gap-3 mt-1 flex-wrap">
-                    <span className="text-xs text-slate-500">⏱ {lesson.duration}</span>
-                    <DifficultyBadge level={lesson.difficulty} />
-                    {lesson.keyPoints?.length > 0 && (
-                      <span className="text-xs text-slate-500">{lesson.keyPoints.length} key points</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  {done ? (
-                    <span className="badge bg-emerald-500/20 text-emerald-400 text-xs">Done</span>
-                  ) : (
-                    <span className="badge bg-slate-700 text-slate-400 text-xs">Start</span>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-black text-white">{track.title}</h2>
+                <p className="text-slate-400 text-xs mt-0.5">{track.subtitle}</p>
+                <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-slate-500">
+                  {meta.level && (
+                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold ${LEVEL_COLORS[meta.level]}`}>
+                      {meta.level}
+                    </span>
                   )}
-                  <span className="text-slate-500 text-sm">→</span>
+                  <span className="flex items-center gap-1"><BookOpen size={11} /> {track.lessons.length} missions</span>
+                  <span className="flex items-center gap-1"><Target size={11} /> {meta.hours}h est.</span>
+                  <span className="flex items-center gap-1"><Zap size={11} /> {totalXP} XP earned</span>
                 </div>
-              </Link>
-            );
-          })}
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-3xl font-black text-white">{progress}%</div>
+                <div className="text-xs text-slate-500">{completedCount}/{track.lessons.length} done</div>
+              </div>
+            </div>
+            <div className="mt-3 h-2 rounded-full bg-slate-900/80 overflow-hidden">
+              <div
+                className={`h-full rounded-full bg-gradient-to-r ${track.gradient} transition-all duration-700`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Mission nodes */}
+          <div className="space-y-0">
+            {track.lessons.map((lesson, idx) => (
+              <MissionNode
+                key={lesson.id}
+                lesson={lesson}
+                idx={idx}
+                trackId={track.id}
+                status={lessonStates[idx]}
+                track={track}
+              />
+            ))}
+            {/* End cap */}
+            <div className="flex gap-4 items-center pt-2">
+              <div className="w-11 flex justify-center">
+                <div className={`w-11 h-11 rounded-full border-2 flex items-center justify-center ${
+                  progress === 100
+                    ? `bg-gradient-to-br ${track.gradient} border-transparent`
+                    : 'border-dashed border-slate-700 bg-slate-900/40'
+                }`}>
+                  {progress === 100
+                    ? <Star size={18} className="text-white" />
+                    : <Star size={16} className="text-slate-700" />
+                  }
+                </div>
+              </div>
+              <div className={`text-sm font-bold ${progress === 100 ? 'text-amber-400' : 'text-slate-700'}`}>
+                {progress === 100 ? '🎉 Track Complete! Take the quiz.' : 'Track Complete — Unlock with all missions'}
+              </div>
+              {progress === 100 && (
+                <Link to={`/quiz/${track.id}`} className="btn-primary text-xs ml-auto">
+                  Take Quiz →
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Track CTA */}
-        <div className="mt-4 flex items-center gap-3">
-          <Link to={`/quiz/${track.id}`} className="btn-secondary text-sm">
-            Take Track Quiz
-          </Link>
-          <Link to="/practice" className="btn-secondary text-sm">
-            Practice Exercises
-          </Link>
-          <Link to="/interview" className="btn-secondary text-sm">
-            Interview Questions
-          </Link>
+        {/* Sidebar */}
+        <div className="space-y-4">
+          {/* Quick stats */}
+          <div className="card space-y-3">
+            <h3 className="text-sm font-bold text-white">Track Stats</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Missions', value: track.lessons.length },
+                { label: 'Completed', value: completedCount },
+                { label: 'XP Earned', value: totalXP },
+                { label: 'Est. Hours', value: `${meta.hours}h` },
+              ].map(s => (
+                <div key={s.label} className="rounded-lg bg-slate-950/60 border border-white/8 p-2.5 text-center">
+                  <div className="text-lg font-black text-white">{s.value}</div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wide">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Next up */}
+          {currentMission && (
+            <div className="card border border-blue-500/30 bg-blue-500/5">
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                <span className="text-[10px] font-bold tracking-widest text-blue-400 uppercase">Up Next</span>
+              </div>
+              <h4 className="font-bold text-white text-sm mb-1">{currentMission.title}</h4>
+              <div className="flex items-center gap-2 text-xs text-slate-500 mb-3">
+                <span>{currentMission.duration}</span>
+                <span>•</span>
+                <span className={DIFF_COLORS[currentMission.difficulty] ?? DIFF_COLORS.Beginner}>
+                  {currentMission.difficulty}
+                </span>
+                {hasExercise(track.id, currentMission.id) && (
+                  <>
+                    <span>•</span>
+                    <span className="text-violet-400 flex items-center gap-0.5"><Zap size={9} /> Coding</span>
+                  </>
+                )}
+              </div>
+              <Link
+                to={`/courses/${track.id}/lesson/${currentMission.id}`}
+                className="btn-primary text-xs w-full justify-center"
+              >
+                <Play size={12} /> Start Mission
+              </Link>
+            </div>
+          )}
+
+          {/* Quick actions */}
+          <div className="card space-y-2">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Quick Actions</h3>
+            <Link to={`/quiz/${track.id}`} className="btn-secondary text-xs w-full justify-start">
+              <ChevronRight size={12} /> Take Track Quiz
+            </Link>
+            <Link to="/codelab" className="btn-secondary text-xs w-full justify-start">
+              <ChevronRight size={12} /> Code Lab
+            </Link>
+            <Link to="/aicoach" className="btn-secondary text-xs w-full justify-start">
+              <ChevronRight size={12} /> Ask AI Coach
+            </Link>
+          </div>
         </div>
       </div>
     </div>
   );
-}
-
-function Stat({ label, value }) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2">
-      <div className="text-lg font-bold text-white">{value}</div>
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-    </div>
-  );
-}
-
-function DifficultyBadge({ level }) {
-  const colors = {
-    Beginner:     'bg-emerald-500/20 text-emerald-400',
-    Intermediate: 'bg-amber-500/20 text-amber-400',
-    Advanced:     'bg-rose-500/20 text-rose-400',
-  };
-  return <span className={`badge text-xs ${colors[level] ?? colors.Beginner}`}>{level}</span>;
 }
