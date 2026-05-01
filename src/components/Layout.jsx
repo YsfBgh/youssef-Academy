@@ -134,7 +134,7 @@ export default function Layout() {
           </button>
         </div>
 
-        <nav className="sidebar-nav flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        <nav className="sidebar-nav flex-1 min-h-0 space-y-5 overflow-y-auto px-3 py-4">
           {NAV_SECTIONS.map(section => (
             <div key={section.label}>
               {showSidebarLabels && (
