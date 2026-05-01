@@ -35,14 +35,30 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #475569;
   }
-  /* Sidebar nav — zero-width scrollbar, scrolls silently */
+  /* Sidebar nav — thin scrollbar, hidden until hover */
   .sidebar-nav::-webkit-scrollbar {
-    width: 0;
+    width: 3px;
+  }
+  .sidebar-nav::-webkit-scrollbar-track {
     background: transparent;
   }
+  .sidebar-nav::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 99px;
+    transition: background 0.2s;
+  }
+  .sidebar-nav:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .sidebar-nav:hover::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
   .sidebar-nav {
-    scrollbar-width: none;   /* Firefox */
-    -ms-overflow-style: none; /* IE/Edge */
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .sidebar-nav:hover {
+    scrollbar-color: rgba(255,255,255,0.12) transparent;
   }
 }
 
