@@ -1,378 +1,324 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { TRACKS } from '../data/courses';
 import { useAuth } from './AuthContext';
+import { supabase } from './supabaseClient';
 
 const ProgressContext = createContext(null);
 
+// ── Defensive normalizer — keeps corrupted DB data from crashing the app ──
 function normalizeProgress(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {};
-  }
-
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const obj = (key) =>
+    value[key] && typeof value[key] === 'object' && !Array.isArray(value[key]) ? value[key] : {};
   return {
     ...value,
-    lessons: value.lessons && typeof value.lessons === 'object' && !Array.isArray(value.lessons)
-      ? value.lessons : {},
-    quizzes: value.quizzes && typeof value.quizzes === 'object' && !Array.isArray(value.quizzes)
-      ? value.quizzes : {},
-    challenges: value.challenges && typeof value.challenges === 'object' && !Array.isArray(value.challenges)
-      ? value.challenges : {},
-    missions: value.missions && typeof value.missions === 'object' && !Array.isArray(value.missions)
-      ? value.missions : {},
-    projects: value.projects && typeof value.projects === 'object' && !Array.isArray(value.projects)
-      ? value.projects : {},
-    interviews: value.interviews && typeof value.interviews === 'object' && !Array.isArray(value.interviews)
-      ? value.interviews : {},
-    agentLessons: value.agentLessons && typeof value.agentLessons === 'object' && !Array.isArray(value.agentLessons)
-      ? value.agentLessons : {},
-    agentSims: value.agentSims && typeof value.agentSims === 'object' && !Array.isArray(value.agentSims)
-      ? value.agentSims : {},
-    enterpriseMissions: value.enterpriseMissions && typeof value.enterpriseMissions === 'object' && !Array.isArray(value.enterpriseMissions)
-      ? value.enterpriseMissions : {},
-    skillNodes: value.skillNodes && Array.isArray(value.skillNodes)
-      ? value.skillNodes : [],
-    dailyMissions: value.dailyMissions && typeof value.dailyMissions === 'object' && !Array.isArray(value.dailyMissions)
-      ? value.dailyMissions : {},
-    careerChecks: value.careerChecks && typeof value.careerChecks === 'object' && !Array.isArray(value.careerChecks)
-      ? value.careerChecks : {},
-    seniorHabits: value.seniorHabits && typeof value.seniorHabits === 'object' && !Array.isArray(value.seniorHabits)
-      ? value.seniorHabits : {},
-    codeReviews: value.codeReviews && typeof value.codeReviews === 'object' && !Array.isArray(value.codeReviews)
-      ? value.codeReviews : {},
-    debugScenarios: value.debugScenarios && typeof value.debugScenarios === 'object' && !Array.isArray(value.debugScenarios)
-      ? value.debugScenarios : {},
-    architectureScenarios: value.architectureScenarios && typeof value.architectureScenarios === 'object' && !Array.isArray(value.architectureScenarios)
-      ? value.architectureScenarios : {},
+    lessons:               obj('lessons'),
+    quizzes:               obj('quizzes'),
+    challenges:            obj('challenges'),
+    missions:              obj('missions'),
+    projects:              obj('projects'),
+    interviews:            obj('interviews'),
+    agentLessons:          obj('agentLessons'),
+    agentSims:             obj('agentSims'),
+    enterpriseMissions:    obj('enterpriseMissions'),
+    skillNodes:            Array.isArray(value.skillNodes) ? value.skillNodes : [],
+    dailyMissions:         obj('dailyMissions'),
+    careerChecks:          obj('careerChecks'),
+    seniorHabits:          obj('seniorHabits'),
+    codeReviews:           obj('codeReviews'),
+    debugScenarios:        obj('debugScenarios'),
+    architectureScenarios: obj('architectureScenarios'),
+    lastVisit:             typeof value.lastVisit === 'string' ? value.lastVisit : '',
+    streak:                typeof value.streak === 'number'   ? value.streak   : 0,
   };
 }
 
+// ── XP calculator ──────────────────────────────────────────────────────────
 function calculateXP(progress) {
-  const lessonXP = Object.keys(progress.lessons ?? {}).length * 50;
-  const quizXP = Object.values(progress.quizzes ?? {}).reduce((s, q) => s + Math.round(q.score * 1.5), 0);
-  const challengeXP = Object.keys(progress.challenges ?? {}).length * 100;
-  const missionXP = Object.keys(progress.missions ?? {}).length * 50;
-  const projectMilestoneXP = Object.values(progress.projects ?? {}).reduce((s, p) => s + (p.completedMilestones?.length ?? 0) * 100, 0);
-  const interviewXP = Object.keys(progress.interviews ?? {}).length * 30;
-  const agentLessonXP = Object.keys(progress.agentLessons ?? {}).length * 60;
-  const agentSimXP = Object.keys(progress.agentSims ?? {}).length * 150;
-  const enterpriseXP = Object.values(progress.enterpriseMissions ?? {}).reduce((s, m) => s + (m.xpEarned ?? 0), 0);
-  const dailyBonusXP = Object.keys(progress.dailyMissions ?? {}).length * 100;
-  const codeReviewXP = Object.keys(progress.codeReviews ?? {}).length * 80;
-  const debugXP = Object.keys(progress.debugScenarios ?? {}).length * 90;
-  const architectureXP = Object.keys(progress.architectureScenarios ?? {}).length * 120;
-  const seniorHabitXP = Object.values(progress.seniorHabits ?? {}).reduce((s, value) => s + Object.keys(value ?? {}).length * 15, 0);
-  return lessonXP + quizXP + challengeXP + missionXP + projectMilestoneXP +
-    interviewXP + agentLessonXP + agentSimXP + enterpriseXP + dailyBonusXP +
-    codeReviewXP + debugXP + architectureXP + seniorHabitXP;
+  const lessonXP       = Object.keys(progress.lessons            ?? {}).length * 50;
+  const quizXP         = Object.values(progress.quizzes          ?? {}).reduce((s, q) => s + Math.round((q.score ?? 0) * 1.5), 0);
+  const challengeXP    = Object.keys(progress.challenges         ?? {}).length * 100;
+  const missionXP      = Object.keys(progress.missions           ?? {}).length * 50;
+  const projectXP      = Object.values(progress.projects         ?? {}).reduce((s, p) => s + (p.completedMilestones?.length ?? 0) * 100, 0);
+  const interviewXP    = Object.keys(progress.interviews         ?? {}).length * 30;
+  const agentLessonXP  = Object.keys(progress.agentLessons       ?? {}).length * 60;
+  const agentSimXP     = Object.keys(progress.agentSims          ?? {}).length * 150;
+  const enterpriseXP   = Object.values(progress.enterpriseMissions ?? {}).reduce((s, m) => s + (m.xpEarned ?? 0), 0);
+  const dailyXP        = Object.keys(progress.dailyMissions      ?? {}).length * 100;
+  const codeReviewXP   = Object.keys(progress.codeReviews        ?? {}).length * 80;
+  const debugXP        = Object.keys(progress.debugScenarios     ?? {}).length * 90;
+  const archXP         = Object.keys(progress.architectureScenarios ?? {}).length * 120;
+  const habitXP        = Object.values(progress.seniorHabits     ?? {}).reduce(
+    (s, day) => s + Object.keys(typeof day === 'object' ? day : {}).length * 15, 0
+  );
+  return lessonXP + quizXP + challengeXP + missionXP + projectXP + interviewXP
+       + agentLessonXP + agentSimXP + enterpriseXP + dailyXP + codeReviewXP
+       + debugXP + archXP + habitXP;
 }
 
-function calculateTotalProgress(progress) {
-  const totalLessons = TRACKS.reduce((s, t) => s + t.lessons.length, 0);
-  const completedLessons = Object.keys(progress.lessons ?? {}).length;
-  return totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
-}
-
+// ── Provider ───────────────────────────────────────────────────────────────
 export function ProgressProvider({ children }) {
-  const { currentUser, updateStats } = useAuth();
-  const [progress, setProgress] = useState(() => normalizeProgress(currentUser?.progress));
+  const { currentUser } = useAuth();
+  const [progress, setProgress] = useState(normalizeProgress({}));
+  const [saving, setSaving] = useState(false);
 
+  // Load from Supabase on mount / user change
   useEffect(() => {
-    setProgress(normalizeProgress(currentUser?.progress));
-  }, [currentUser?.id, currentUser?.progress]);
+    if (!currentUser?.id) return;
+    supabase
+      .from('profiles')
+      .select('progress')
+      .eq('id', currentUser.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.progress) setProgress(normalizeProgress(data.progress));
+      });
+  }, [currentUser?.id]);
 
-  const save = useCallback((next) => {
-    const normalized = normalizeProgress(next);
-    setProgress(normalized);
-    const xp = calculateXP(normalized);
-    updateStats({
-      progress: normalized,
+  // Persist to Supabase
+  const persist = useCallback(async (updated) => {
+    if (!currentUser?.id || saving) return;
+    setSaving(true);
+    const xp    = calculateXP(updated);
+    const level = Math.floor(xp / 500) + 1;
+    const total = calculateTotalProgressFromRaw(updated);
+    await supabase.from('profiles').update({
+      progress:        updated,
       xp,
-      level: Math.floor(xp / 500) + 1,
-      totalProgress: calculateTotalProgress(normalized),
-      streak: normalized.streak ?? 1,
-    }).catch(err => {
-      console.error('Failed to save progress to database', err);
+      level,
+      total_progress:  total,
+      streak:          updated.streak ?? 0,
+    }).eq('id', currentUser.id);
+    setSaving(false);
+  }, [currentUser?.id, saving]);
+
+  const update = useCallback((fn) => {
+    setProgress(prev => {
+      const next = normalizeProgress(fn(prev));
+      persist(next);
+      return next;
     });
-  }, [updateStats]);
+  }, [persist]);
 
-  // ─── Original helpers ────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────
+  function calculateTotalProgressFromRaw(p) {
+    const totalLessons = TRACKS.reduce((s, t) => s + t.lessons.length, 0);
+    if (totalLessons === 0) return 0;
+    const completed = Object.keys(p.lessons ?? {}).length;
+    return Math.round((completed / totalLessons) * 100);
+  }
+
+  // Lessons
   const markLessonComplete = useCallback((trackId, lessonId) => {
-    const next = { ...progress };
-    if (!next.lessons) next.lessons = {};
-    next.lessons[`${trackId}:${lessonId}`] = { completedAt: Date.now() };
-    save(next);
-  }, [progress, save]);
-
-  const markQuizComplete = useCallback((trackId, score) => {
-    const next = { ...progress };
-    if (!next.quizzes) next.quizzes = {};
-    const prev = next.quizzes[trackId];
-    if (!prev || score > (prev.score ?? 0)) {
-      next.quizzes[trackId] = { score, completedAt: Date.now() };
-    }
-    save(next);
-  }, [progress, save]);
-
-  const markChallengeComplete = useCallback((challengeId) => {
-    const next = { ...progress };
-    if (!next.challenges) next.challenges = {};
-    next.challenges[challengeId] = { completedAt: Date.now() };
-    save(next);
-  }, [progress, save]);
-
+    update(p => ({ ...p, lessons: { ...p.lessons, [`${trackId}:${lessonId}`]: { completedAt: Date.now() } } }));
+  }, [update]);
   const isLessonComplete = useCallback((trackId, lessonId) =>
-    !!(progress.lessons?.[`${trackId}:${lessonId}`]),
-  [progress]);
+    !!progress.lessons?.[`${trackId}:${lessonId}`], [progress.lessons]);
 
+  // Quizzes
+  const markQuizComplete = useCallback((trackId, score) => {
+    update(p => ({ ...p, quizzes: { ...p.quizzes, [trackId]: { score, completedAt: Date.now() } } }));
+  }, [update]);
   const isQuizComplete = useCallback((trackId) =>
-    !!(progress.quizzes?.[trackId]),
-  [progress]);
+    !!progress.quizzes?.[trackId], [progress.quizzes]);
 
+  // Challenges
+  const markChallengeComplete = useCallback((challengeId) => {
+    update(p => ({ ...p, challenges: { ...p.challenges, [challengeId]: { completedAt: Date.now() } } }));
+  }, [update]);
   const isChallengeComplete = useCallback((id) =>
-    !!(progress.challenges?.[id]),
-  [progress]);
+    !!progress.challenges?.[id], [progress.challenges]);
 
-  const getTrackProgress = useCallback((trackId) => {
-    const track = TRACKS.find(t => t.id === trackId);
-    if (!track) return 0;
-    const completed = track.lessons.filter(l => isLessonComplete(trackId, l.id)).length;
-    return Math.round((completed / track.lessons.length) * 100);
-  }, [isLessonComplete]);
-
-  const getTotalProgress = useCallback(() => {
-    return calculateTotalProgress(progress);
-  }, [progress]);
-
-  const getXP = useCallback(() => {
-    return calculateXP(progress);
-  }, [progress]);
-
-  const getStreak = useCallback(() => {
-    const today = new Date().toDateString();
-    return progress.lastVisit === today ? (progress.streak ?? 1) : 1;
-  }, [progress]);
-
-  const updateStreak = useCallback(() => {
-    const today = new Date().toDateString();
-    if (progress.lastVisit === today) return;
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    const newStreak = progress.lastVisit === yesterday ? (progress.streak ?? 0) + 1 : 1;
-    save({ ...progress, lastVisit: today, streak: newStreak });
-  }, [progress, save]);
-
-  const resetProgress = useCallback(() => {
-    save({});
-  }, [save]);
-
-  // ─── New helpers ─────────────────────────────────────────────
-
-  const markEnterpriseMissionComplete = useCallback((missionId, xpEarned) => {
-    const next = { ...progress };
-    if (!next.enterpriseMissions) next.enterpriseMissions = {};
-    next.enterpriseMissions[missionId] = { completedAt: Date.now(), xpEarned };
-    save(next);
-  }, [progress, save]);
-
-  const isEnterpriseMissionComplete = useCallback((missionId) =>
-    !!(progress.enterpriseMissions?.[missionId]),
-  [progress]);
-
+  // Projects
   const markProjectMilestoneComplete = useCallback((projectId, milestoneId) => {
-    const next = { ...progress };
-    if (!next.projects) next.projects = {};
-    if (!next.projects[projectId]) next.projects[projectId] = { completedMilestones: [] };
-    const existing = next.projects[projectId].completedMilestones ?? [];
-    if (!existing.includes(milestoneId)) {
-      next.projects[projectId].completedMilestones = [...existing, milestoneId];
-    }
-    save(next);
-  }, [progress, save]);
-
+    update(p => {
+      const existing = p.projects?.[projectId] ?? { completedMilestones: [] };
+      const completedMilestones = Array.isArray(existing.completedMilestones) ? existing.completedMilestones : [];
+      if (completedMilestones.includes(milestoneId)) return p;
+      return { ...p, projects: { ...p.projects, [projectId]: { ...existing, completedMilestones: [...completedMilestones, milestoneId] } } };
+    });
+  }, [update]);
   const isProjectMilestoneComplete = useCallback((projectId, milestoneId) =>
-    !!(progress.projects?.[projectId]?.completedMilestones?.includes(milestoneId)),
-  [progress]);
-
+    !!progress.projects?.[projectId]?.completedMilestones?.includes(milestoneId), [progress.projects]);
   const getProjectProgress = useCallback((projectId, totalMilestones) => {
     const completed = progress.projects?.[projectId]?.completedMilestones?.length ?? 0;
     return totalMilestones > 0 ? Math.round((completed / totalMilestones) * 100) : 0;
-  }, [progress]);
+  }, [progress.projects]);
 
+  // Interviews
   const markInterviewComplete = useCallback((questionId) => {
-    const next = { ...progress };
-    if (!next.interviews) next.interviews = {};
-    next.interviews[questionId] = { completedAt: Date.now() };
-    save(next);
-  }, [progress, save]);
-
+    update(p => ({ ...p, interviews: { ...p.interviews, [questionId]: { completedAt: Date.now() } } }));
+  }, [update]);
   const isInterviewComplete = useCallback((questionId) =>
-    !!(progress.interviews?.[questionId]),
-  [progress]);
+    !!progress.interviews?.[questionId], [progress.interviews]);
 
+  // AI Agents
   const markAgentLessonComplete = useCallback((lessonId) => {
-    const next = { ...progress };
-    if (!next.agentLessons) next.agentLessons = {};
-    next.agentLessons[lessonId] = { completedAt: Date.now() };
-    save(next);
-  }, [progress, save]);
-
+    update(p => ({ ...p, agentLessons: { ...p.agentLessons, [lessonId]: { completedAt: Date.now() } } }));
+  }, [update]);
   const isAgentLessonComplete = useCallback((lessonId) =>
-    !!(progress.agentLessons?.[lessonId]),
-  [progress]);
-
+    !!progress.agentLessons?.[lessonId], [progress.agentLessons]);
   const markAgentSimComplete = useCallback((simId) => {
-    const next = { ...progress };
-    if (!next.agentSims) next.agentSims = {};
-    next.agentSims[simId] = { completedAt: Date.now() };
-    save(next);
-  }, [progress, save]);
-
+    update(p => ({ ...p, agentSims: { ...p.agentSims, [simId]: { completedAt: Date.now() } } }));
+  }, [update]);
   const isAgentSimComplete = useCallback((simId) =>
-    !!(progress.agentSims?.[simId]),
-  [progress]);
+    !!progress.agentSims?.[simId], [progress.agentSims]);
 
-  const unlockSkillNode = useCallback((nodeId) => {
-    const next = { ...progress };
-    if (!next.skillNodes) next.skillNodes = [];
-    if (!next.skillNodes.includes(nodeId)) {
-      next.skillNodes = [...next.skillNodes, nodeId];
-    }
-    save(next);
-  }, [progress, save]);
+  // Enterprise
+  const markEnterpriseMissionComplete = useCallback((missionId, xpEarned = 0) => {
+    update(p => ({ ...p, enterpriseMissions: { ...p.enterpriseMissions, [missionId]: { completedAt: Date.now(), xpEarned } } }));
+  }, [update]);
+  const isEnterpriseMissionComplete = useCallback((id) =>
+    !!progress.enterpriseMissions?.[id], [progress.enterpriseMissions]);
 
-  const isSkillNodeUnlocked = useCallback((nodeId) =>
-    progress.skillNodes?.includes(nodeId) ?? false,
-  [progress]);
-
+  // Daily missions
   const markDailyMissionComplete = useCallback((dateString, key) => {
-    const next = { ...progress };
-    if (!next.dailyMissions) next.dailyMissions = {};
-    if (!next.dailyMissions[dateString]) next.dailyMissions[dateString] = {};
-    next.dailyMissions[dateString][key] = true;
-    // Check if all 4 tasks done → award bonus
-    const tasks = next.dailyMissions[dateString];
-    if (tasks.lesson && tasks.quiz && tasks.challenge && tasks.workflow) {
-      next.dailyMissions[dateString].bonusAwarded = true;
-    }
-    save(next);
-  }, [progress, save]);
+    update(p => {
+      const day = { ...(p.dailyMissions?.[dateString] ?? {}), [key]: true };
+      if (day.lesson && day.quiz && day.challenge && day.workflow) {
+        day.bonusAwarded = true;
+      }
+      return { ...p, dailyMissions: { ...p.dailyMissions, [dateString]: day } };
+    });
+  }, [update]);
+  const getDailyMissionProgress = useCallback((dateString) =>
+    progress.dailyMissions?.[dateString] ?? {}, [progress.dailyMissions]);
 
-  const getDailyMissionProgress = useCallback((dateString) => {
-    return progress.dailyMissions?.[dateString] ?? {};
-  }, [progress]);
+  // Code review
+  const markCodeReviewComplete = useCallback((caseId) => {
+    update(p => ({ ...p, codeReviews: { ...p.codeReviews, [caseId]: { completedAt: Date.now() } } }));
+  }, [update]);
+  const isCodeReviewComplete = useCallback((id) =>
+    !!progress.codeReviews?.[id], [progress.codeReviews]);
 
+  // Debug
+  const markDebugScenarioComplete = useCallback((scenarioId) => {
+    update(p => ({ ...p, debugScenarios: { ...p.debugScenarios, [scenarioId]: { completedAt: Date.now() } } }));
+  }, [update]);
+  const isDebugScenarioComplete = useCallback((id) =>
+    !!progress.debugScenarios?.[id], [progress.debugScenarios]);
+
+  // Architecture
+  const markArchitectureScenarioComplete = useCallback((scenarioId) => {
+    update(p => ({ ...p, architectureScenarios: { ...p.architectureScenarios, [scenarioId]: { completedAt: Date.now() } } }));
+  }, [update]);
+  const isArchitectureScenarioComplete = useCallback((id) =>
+    !!progress.architectureScenarios?.[id], [progress.architectureScenarios]);
+
+  // Skill tree
+  const unlockSkillNode = useCallback((nodeId) => {
+    update(p => {
+      if ((p.skillNodes ?? []).includes(nodeId)) return p;
+      return { ...p, skillNodes: [...(p.skillNodes ?? []), nodeId] };
+    });
+  }, [update]);
+  const isSkillNodeUnlocked = useCallback((id) =>
+    (progress.skillNodes ?? []).includes(id), [progress.skillNodes]);
+
+  // Career checks / senior habits
   const toggleCareerCheck = useCallback((listId, itemIndex) => {
-    const next = { ...progress };
-    if (!next.careerChecks) next.careerChecks = {};
-    if (!next.careerChecks[listId]) next.careerChecks[listId] = [];
-    const existing = next.careerChecks[listId];
-    next.careerChecks[listId] = existing.includes(itemIndex)
-      ? existing.filter(i => i !== itemIndex)
-      : [...existing, itemIndex];
-    save(next);
-  }, [progress, save]);
-
+    update(p => {
+      const existing = Array.isArray(p.careerChecks?.[listId]) ? p.careerChecks[listId] : [];
+      const nextList = existing.includes(itemIndex)
+        ? existing.filter(i => i !== itemIndex)
+        : [...existing, itemIndex];
+      return { ...p, careerChecks: { ...p.careerChecks, [listId]: nextList } };
+    });
+  }, [update]);
   const isCareerCheckComplete = useCallback((listId, itemIndex) =>
-    !!(progress.careerChecks?.[listId]?.includes(itemIndex)),
-  [progress]);
+    Array.isArray(progress.careerChecks?.[listId]) && progress.careerChecks[listId].includes(itemIndex),
+  [progress.careerChecks]);
 
   const toggleSeniorHabit = useCallback((dateString, habitId) => {
-    const next = { ...progress };
-    if (!next.seniorHabits) next.seniorHabits = {};
-    if (!next.seniorHabits[dateString]) next.seniorHabits[dateString] = {};
-    next.seniorHabits[dateString][habitId] = !next.seniorHabits[dateString][habitId];
-    if (!next.seniorHabits[dateString][habitId]) {
-      delete next.seniorHabits[dateString][habitId];
-    }
-    save(next);
-  }, [progress, save]);
-
+    update(p => {
+      const day = { ...(p.seniorHabits?.[dateString] ?? {}) };
+      if (day[habitId]) {
+        delete day[habitId];
+      } else {
+        day[habitId] = true;
+      }
+      return { ...p, seniorHabits: { ...p.seniorHabits, [dateString]: day } };
+    });
+  }, [update]);
   const isSeniorHabitDone = useCallback((dateString, habitId) =>
-    !!(progress.seniorHabits?.[dateString]?.[habitId]),
-  [progress]);
+    !!progress.seniorHabits?.[dateString]?.[habitId], [progress.seniorHabits]);
 
-  const markCodeReviewComplete = useCallback((caseId) => {
-    const next = { ...progress };
-    if (!next.codeReviews) next.codeReviews = {};
-    next.codeReviews[caseId] = { completedAt: Date.now() };
-    save(next);
-  }, [progress, save]);
+  const markCareerCheck = useCallback((checkId) => {
+    update(p => ({ ...p, careerChecks: { ...p.careerChecks, [checkId]: { completedAt: Date.now() } } }));
+  }, [update]);
+  const markSeniorHabit = useCallback((date, habitKey) => {
+    update(p => ({ ...p, seniorHabits: { ...p.seniorHabits, [date]: { ...(p.seniorHabits?.[date] ?? {}), [habitKey]: true } } }));
+  }, [update]);
 
-  const isCodeReviewComplete = useCallback((caseId) =>
-    !!(progress.codeReviews?.[caseId]),
-  [progress]);
+  // ── Computed values ───────────────────────────────────────
+  const getTotalProgress = useCallback(() => {
+    return calculateTotalProgressFromRaw(progress);
+  }, [progress]);
 
-  const markDebugScenarioComplete = useCallback((scenarioId) => {
-    const next = { ...progress };
-    if (!next.debugScenarios) next.debugScenarios = {};
-    next.debugScenarios[scenarioId] = { completedAt: Date.now() };
-    save(next);
-  }, [progress, save]);
+  const getTrackProgress = useCallback((trackId) => {
+    const track = TRACKS.find(t => t.id === trackId);
+    if (!track || track.lessons.length === 0) return 0;
+    const completed = track.lessons.filter(l => progress.lessons?.[`${trackId}:${l.id}`]).length;
+    return Math.round((completed / track.lessons.length) * 100);
+  }, [progress]);
 
-  const isDebugScenarioComplete = useCallback((scenarioId) =>
-    !!(progress.debugScenarios?.[scenarioId]),
-  [progress]);
+  const getXP = useCallback(() => calculateXP(progress), [progress]);
+  const getStreak = useCallback(() => progress.streak ?? 0, [progress]);
 
-  const markArchitectureScenarioComplete = useCallback((scenarioId) => {
-    const next = { ...progress };
-    if (!next.architectureScenarios) next.architectureScenarios = {};
-    next.architectureScenarios[scenarioId] = { completedAt: Date.now() };
-    save(next);
-  }, [progress, save]);
+  const updateStreak = useCallback(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (progress.lastVisit === today) return;
+    update(p => {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const streak = p.lastVisit === yesterday ? (p.streak ?? 0) + 1 : 1;
+      return { ...p, lastVisit: today, streak };
+    });
+  }, [progress, update]);
 
-  const isArchitectureScenarioComplete = useCallback((scenarioId) =>
-    !!(progress.architectureScenarios?.[scenarioId]),
-  [progress]);
+  const resetProgress = useCallback(() => {
+    update(() => normalizeProgress({}));
+  }, [update]);
 
-  return (
-    <ProgressContext.Provider value={{
-      progress,
-      // Original
-      markLessonComplete,
-      markQuizComplete,
-      markChallengeComplete,
-      isLessonComplete,
-      isQuizComplete,
-      isChallengeComplete,
-      getTrackProgress,
-      getTotalProgress,
-      getXP,
-      getStreak,
-      updateStreak,
-      resetProgress,
-      // New
-      markEnterpriseMissionComplete,
-      isEnterpriseMissionComplete,
-      markProjectMilestoneComplete,
-      isProjectMilestoneComplete,
-      getProjectProgress,
-      markInterviewComplete,
-      isInterviewComplete,
-      markAgentLessonComplete,
-      isAgentLessonComplete,
-      markAgentSimComplete,
-      isAgentSimComplete,
-      unlockSkillNode,
-      isSkillNodeUnlocked,
-      markDailyMissionComplete,
-      getDailyMissionProgress,
-      toggleCareerCheck,
-      isCareerCheckComplete,
-      toggleSeniorHabit,
-      isSeniorHabitDone,
-      markCodeReviewComplete,
-      isCodeReviewComplete,
-      markDebugScenarioComplete,
-      isDebugScenarioComplete,
-      markArchitectureScenarioComplete,
-      isArchitectureScenarioComplete,
-    }}>
-      {children}
-    </ProgressContext.Provider>
-  );
+  const value = {
+    progress,
+    saving,
+    // Lessons
+    markLessonComplete, isLessonComplete,
+    // Quizzes
+    markQuizComplete, isQuizComplete,
+    // Challenges
+    markChallengeComplete, isChallengeComplete,
+    // Projects
+    markProjectMilestoneComplete, isProjectMilestoneComplete, getProjectProgress,
+    // Interview
+    markInterviewComplete, isInterviewComplete,
+    // AI Agents
+    markAgentLessonComplete, isAgentLessonComplete,
+    markAgentSimComplete, isAgentSimComplete,
+    // Enterprise
+    markEnterpriseMissionComplete, isEnterpriseMissionComplete,
+    // Daily
+    markDailyMissionComplete, getDailyMissionProgress,
+    // Labs
+    markCodeReviewComplete, isCodeReviewComplete,
+    markDebugScenarioComplete, isDebugScenarioComplete,
+    markArchitectureScenarioComplete, isArchitectureScenarioComplete,
+    // Skill tree
+    unlockSkillNode, isSkillNodeUnlocked,
+    // Career
+    toggleCareerCheck, isCareerCheckComplete,
+    toggleSeniorHabit, isSeniorHabitDone,
+    markCareerCheck, markSeniorHabit,
+    // Computed
+    getTotalProgress, getTrackProgress, getXP, getStreak,
+    updateStreak, resetProgress,
+  };
+
+  return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }
 
 export function useProgress() {
   const ctx = useContext(ProgressContext);
-  if (!ctx) throw new Error('useProgress must be inside ProgressProvider');
+  if (!ctx) throw new Error('useProgress must be used inside ProgressProvider');
   return ctx;
 }
